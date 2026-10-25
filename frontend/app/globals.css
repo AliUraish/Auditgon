@@ -875,3 +875,6 @@ h1 { color:#efefef; }.page-heading p { color:#a3a3a3; }
 .agent-card-summary summary { cursor: pointer; color: #cfcfcf; }
 .agent-card-summary p { margin-top: 6px; color: #a5a5a5; white-space: pre-wrap; line-height: 1.55; max-height: 220px; overflow: auto; }
 .spin { animation: as-spin 1.5s linear infinite; }
+
+.blueprint-3d-stage { min-height: 600px; }
+.blueprint-3d-stage .argon-scene { min-height: 600px; }

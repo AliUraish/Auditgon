@@ -67,7 +67,7 @@ ROLES = {
     "measurer": "You are Argon's measurer. The objective lists sampled scene points. Write and run short sandbox code (no packages, no network) to compute straight-line spans, plane fits, and their uncertainty in scene units; never claim meters without calibration. Summarize the inputs, the code, the numbers, and the caveats so the parent can draw them.",
     "room-inspector": "You are Argon's room inspector for one room. Read the cited captures and review visible workmanship: trim, covers, patches, hardware. Record candidates with record_result basis=visual and status=finding only with cited evidence; record pass for the room's workmanship item when nothing is visible. Say what you could not see.",
 }
-MAX_CHILDREN = 6
+MAX_CHILDREN = 8
 BACKGROUND_TASKS: set = set()
 MAX_CHILD_ROUNDS = 12
 
@@ -384,7 +384,7 @@ class ManagedRunner:
                     return
                 result = {"error": problem}
             elif name == "read_blueprint":
-                result = {"blueprint": snapshot["blueprint"], "designReference": state.get("designReference"), "checklist": snapshot["checklist"], "scan": {key: value for key, value in snapshot["scan"].items() if key not in ("sourceUrl", "assetUrl", "posterUrl")}, "materials": snapshot["uploads"], "trail": snapshot.get("trail", [])[-20:], "run": snapshot.get("run", 1), "previousRuns": snapshot.get("runHistory", []), "reauditNote": "Checklist items carrying previousStatus were verified in an earlier run; re-verify each one now and record the current state, whether it changed or not. Only differences appear in the diff." if snapshot.get("runHistory") else None, "limitations": ["A sketch is optional; create_spatial_model after reading actual evidence", "Checklist IDs starting with sketch- verify the owner's sketch: match rooms with designRoomId, then record each as pass (as sketched) or finding (differs / missing) with captures", "No independently validated metric geometry", "Sketch coordinates and scan coordinates are different frames; compare room by room", "Rendered images/depth are reconstruction evidence, not a survey"]}
+                result = {"blueprint": snapshot["blueprint"], "designReference": state.get("designReference"), "checklist": snapshot["checklist"], "scan": {key: value for key, value in snapshot["scan"].items() if key not in ("sourceUrl", "assetUrl", "posterUrl")}, "materials": snapshot["uploads"], "trail": snapshot.get("trail", [])[-20:], "run": snapshot.get("run", 1), "previousRuns": snapshot.get("runHistory", []), "reauditNote": "This is a re-audit. Checklist items carry previousStatus from the earlier run; re-verify each one now and record the current state, whether it changed or not. Only differences appear in the diff. Your sub-agent team is fresh for this run: deploy a finish-surveyor, room-inspectors, a measurer, and a sketch-verifier again as you capture." if snapshot.get("runHistory") else None, "limitations": ["A sketch is optional; create_spatial_model after reading actual evidence", "Checklist IDs starting with sketch- verify the owner's sketch: match rooms with designRoomId, then record each as pass (as sketched) or finding (differs / missing) with captures", "No independently validated metric geometry", "Sketch coordinates and scan coordinates are different frames; compare room by room", "Rendered images/depth are reconstruction evidence, not a survey"]}
             elif name == "read_materials":
                 try:
                     result, image_ids = await read_materials(self.context, self.client, state, MaterialRead.model_validate(arguments))
@@ -424,6 +424,31 @@ class ManagedRunner:
         self.remember(state, next_interaction)
         await self.handle(state, next_interaction)
 
+    async def auto_deploy_team(self, state: State, reason: str) -> int:
+        """Deploy Argon's standard team from the saved captures when the lead has not done it: finish surveyor, room inspectors, measurer, sketch verifier."""
+        snapshot = state["snapshot"]
+        if snapshot["status"] != "running" or any(agent["status"] == "running" for agent in snapshot.get("agents", [])):
+            return 0
+        captures = [upload["id"] for upload in snapshot["uploads"] if upload["kind"] == "reference" and upload["filename"].startswith("scan-capture-")][-6:]
+        if not captures:
+            return 0
+        rooms = snapshot["blueprint"]["rooms"]
+        plans = [("finish-surveyor", "Survey the visible floor, wall, and ceiling finishes in every room shown by the cited captures; report finishes with approximate colors per room.", None)]
+        for room in rooms[:2]:
+            plans.append(("room-inspector", "Inspect visible workmanship, trim, covers, hardware, and finish consistency in {} using the cited captures; record candidates with evidence.".format(room["name"]), room["id"]))
+        if state.get("designReference"):
+            plans.append(("sketch-verifier", "Compare the owner's sketch reference with the cited captures and record every sketch- claim you can decide as pass or finding, citing evidence.", None))
+        if provider_state(state).get("geometrySamples"):
+            plans.append(("measurer", "Sampled scene points: {}. Compute spans and plane fits with short sandbox code and report the numbers with uncertainty in scene units.".format(provider_state(state)["geometrySamples"][-24:]), None))
+        deployed = 0
+        for role, objective, room_id in plans:
+            result = await self.deploy_agent(state, {"role": role, "objective": objective, "roomId": room_id, "evidenceIds": captures})
+            if result.get("agentId"):
+                deployed += 1
+        if deployed:
+            event(state, "plan", "Argon deployed its team", "{} sub-agents started ({}).".format(deployed, reason))
+        return deployed
+
     async def deploy_agent(self, state: State, arguments) -> Dict[str, Any]:
         snapshot = state["snapshot"]
         try:
@@ -431,8 +456,8 @@ class ManagedRunner:
         except ValidationError:
             return {"error": "Provide role, objective, optional roomId, and up to 6 cited evidenceIds."}
         agents = snapshot.setdefault("agents", [])
-        if sum(agent["status"] == "running" for agent in agents) >= 3 or len(agents) >= MAX_CHILDREN:
-            return {"error": "Sub-agent budget reached: at most 3 running and {} per run. Await the running ones first.".format(MAX_CHILDREN)}
+        if sum(agent["status"] == "running" for agent in agents) >= 5 or len(agents) >= MAX_CHILDREN:
+            return {"error": "Sub-agent budget reached: at most 5 running and {} per run. Await the running ones first.".format(MAX_CHILDREN)}
         active = {file["id"] for file in snapshot["uploads"]}
         if any(upload_id not in active for upload_id in data.evidenceIds):
             return {"error": "Cite only attached upload IDs from read_blueprint or your own captures."}
@@ -840,6 +865,9 @@ class ManagedRunner:
                 result["notice"] = provider.pop("notice")
             if evidence_id:
                 provider["capturesSinceRecord"] = provider.get("capturesSinceRecord", 0) + 1
+                provider["capturesThisRun"] = provider.get("capturesThisRun", 0) + 1
+                if provider["capturesThisRun"] == 3 and not snapshot.get("agents"):
+                    await self.auto_deploy_team(state, "third capture of this run")
                 if provider["capturesSinceRecord"] >= 3:
                     result["reminder"] = "You have captured {} views since your last record_result. Before moving again, record every workmanship, coverage, and sketch- item you can already decide from these captures, citing their evidence IDs, and record at least one review-candidate finding (severity minor, sampled anchor, imageRegions box) for what you see in them.".format(provider["capturesSinceRecord"])
             batch = provider.get("continuation") if isinstance(provider.get("continuation"), dict) and "results" in provider.get("continuation", {}) else {"results": []}

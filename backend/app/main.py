@@ -159,6 +159,7 @@ def create_app(settings: Optional[Settings] = None, transport: Optional[httpx.As
             start_reaudit(state)
             async with application.state.heavy_operations:
                 await managed.start(state)
+                await managed.auto_deploy_team(state, "re-audit start, from the previous run's captures")
         elif data.action == "reset":
             if state["snapshot"]["mode"] == "managed":
                 await managed.cancel(state)

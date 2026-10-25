@@ -337,16 +337,17 @@ def start_reaudit(state: State, now: Optional[int] = None) -> Dict[str, Any]:
     stop_clock(state, now)
     number = snapshot.get("run", 1)
     baseline = {"id": uid(), "number": number, "endedAt": iso(now), "startedAt": snapshot.get("startedAt"), "verdict": snapshot["verdict"], "status": snapshot["status"], "elapsedSeconds": snapshot["elapsedSeconds"],
-                "checklist": deepcopy(snapshot["checklist"]), "findings": deepcopy(snapshot["findings"]), "blueprint": deepcopy(snapshot["blueprint"]), "trail": deepcopy(snapshot.get("trail", []))}
+                "checklist": deepcopy(snapshot["checklist"]), "findings": deepcopy(snapshot["findings"]), "blueprint": deepcopy(snapshot["blueprint"]), "trail": deepcopy(snapshot.get("trail", [])), "agents": []}
     state["runs"] = (state.get("runs", []) + [baseline])[-5:]
     snapshot["runHistory"] = (snapshot.get("runHistory", []) + [{"number": number, "endedAt": baseline["endedAt"], "verdict": baseline["verdict"], "checks": len(baseline["checklist"]), "findings": len(baseline["findings"]), "rooms": len(baseline["blueprint"]["rooms"])}])[-5:]
     snapshot["run"] = number + 1
     for item in snapshot["checklist"]:
+        # Results stay visible; Argon re-verifies in place and only differences show in the diff.
         item["previousStatus"] = item["status"]
         item.pop("changed", None)
-        if item["status"] in ("pass", "finding", "blocked", "observing"):
-            item["status"] = "pending"
-    snapshot.update(status="ready", verdict="Incomplete", currentItemId=None, startedAt=None, elapsedSeconds=0)
+    baseline["agents"] = deepcopy(snapshot.get("agents", []))
+    snapshot["agents"] = []
+    snapshot.update(status="ready", currentItemId=None, startedAt=None, elapsedSeconds=0)
     snapshot.pop("agent", None)
     state.pop("provider", None)
     state["elapsedMs"] = 0

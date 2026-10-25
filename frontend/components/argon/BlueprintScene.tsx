@@ -13,7 +13,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
   const host = useRef<HTMLDivElement>(null);
   const runtime = useRef<Runtime | null>(null);
   const labels = useRef(new Map<string, HTMLDivElement | HTMLButtonElement>());
-  const controls = useRef({ yaw: rotation + 1.4, pitch: 0.83, zoom, panX: 0, panZ: 0 });
+  const controls = useRef({ yaw: rotation + 1.4, pitch: 0.83, zoom: zoom * 1.3, panX: 0, panZ: 0 });
   const currentView = useRef(viewMode);
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -29,7 +29,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
     return () => document.removeEventListener('visibilitychange', visibility);
   }, []);
   useEffect(() => {
-    controls.current.zoom = zoom; controls.current.yaw = rotation + 1.4;
+    controls.current.zoom = zoom * 1.3; controls.current.yaw = rotation + 1.4;
     currentView.current = viewMode;
     runtime.current?.update();
   }, [zoom, rotation, viewMode]);
@@ -160,12 +160,31 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
           camera.camera.orthoHeight = Math.max(data.extent*0.56,data.extent*0.65/(element.clientWidth/element.clientHeight))/ctrl.zoom;
           ownApp.renderNextFrame = true;
           const factor = ownApp.graphicsDevice.width/element.clientWidth;
+          // Layout pass: project every label, then resolve overlaps (pins first, then measurements, then room names).
+          type Placed = { id: string; el: HTMLElement; x: number; y: number; w: number; h: number; kind: 'pin' | 'measure' | 'room' };
+          const projected: Placed[] = [];
           for (const marker of markers) {
             const label = labels.current.get(marker.id); if (!label) continue;
             const point = camera.camera.worldToScreen(new pc.Vec3(...marker.position));
             const x=point.x/factor,y=point.y/factor;
-            label.style.transform='translate(-50%,-50%) translate('+x+'px,'+y+'px)';
-            label.style.visibility = x>-30 && x<element.clientWidth+30 && y>-30 && y<element.clientHeight+30 ? 'visible' : 'hidden';
+            const visible = x>-30 && x<element.clientWidth+30 && y>-30 && y<element.clientHeight+30;
+            label.style.visibility = visible ? 'visible' : 'hidden';
+            if (!visible) continue;
+            projected.push({ id: marker.id, el: label, x, y, w: label.offsetWidth || 24, h: label.offsetHeight || 24, kind: marker.id.startsWith('finding-') ? 'pin' : marker.id.startsWith('measure-') ? 'measure' : 'room' });
+          }
+          const order = { pin: 0, measure: 1, room: 2 } as const;
+          projected.sort((a, b) => order[a.kind] - order[b.kind] || a.y - b.y || a.x - b.x);
+          const placed: Placed[] = [];
+          const overlaps = (a: Placed, b: Placed) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 + 4 && Math.abs(a.y - b.y) < (a.h + b.h) / 2 + 3;
+          for (const item of projected) {
+            // Small nudges only, so every label stays next to what it marks.
+            const blockers = item.kind === 'room' ? placed.filter(other => other.kind === 'pin') : placed.filter(other => other.kind !== 'room');
+            let tries = 0;
+            if (item.kind === 'pin') { const ox = item.x; while (blockers.some(other => overlaps(item, other)) && tries < 4) { tries++; item.x = ox + (tries % 2 ? 1 : -1) * (item.w + 3) * Math.ceil(tries / 2); } }
+            else if (item.kind === 'measure') { const oy = item.y; if (blockers.some(other => overlaps(item, other))) item.y = oy + item.h + 6; if (blockers.some(other => overlaps(item, other))) item.y = oy - item.h - 6; }
+            else { const oy = item.y; if (blockers.some(other => overlaps(item, other))) item.y = oy + item.h + 8; }
+            placed.push(item);
+            item.el.style.transform='translate(-50%,-50%) translate('+item.x+'px,'+item.y+'px)';
           }
         };
         const resize = () => {
@@ -174,7 +193,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
           ownApp.setCanvasResolution(pc.RESOLUTION_FIXED,Math.round(element.clientWidth*ratio),Math.round(element.clientHeight*ratio));
           canvas.style.width='100%'; canvas.style.height='100%'; update();
         };
-        const reset = () => { controls.current={yaw:0.78,pitch:0.83,zoom:1,panX:0,panZ:0}; update(); };
+        const reset = () => { controls.current={yaw:0.78,pitch:0.83,zoom:1.3,panX:0,panZ:0}; update(); };
         let pointer: { id:number; x:number; y:number; pan:boolean } | null = null;
         const down = (event: PointerEvent) => { pointer={id:event.pointerId,x:event.clientX,y:event.clientY,pan:event.shiftKey||event.button===2};canvas.setPointerCapture(event.pointerId); };
         const move = (event: PointerEvent) => {
@@ -213,7 +232,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
   return <div className="blueprint-renderer" ref={host} tabIndex={0} role="region" aria-label="Interactive blue and white 3D cutaway blueprint. Drag to orbit, scroll to zoom, Shift-drag to pan, or use arrow keys.">
     {!ready && !error && <div className="blueprint-renderer-status"><LoaderCircle size={17} className="as-spin"/>Building the 3D blueprint…</div>}
     {error && <div className="blueprint-renderer-status" role="alert">{error}</div>}
-    {ready && <div className="blueprint-labels">{snapshot.blueprint.rooms.map(room=><div key={room.id} className="blueprint-room-label" ref={node=>{if(node)labels.current.set('room-'+room.id,node);else labels.current.delete('room-'+room.id);}}>{room.name}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed'&&f.endAnchor&&f.measurement).map(finding=><div key={'measure-'+finding.id} className="blueprint-measure-label" ref={node=>{if(node)labels.current.set('measure-'+finding.id,node);else labels.current.delete('measure-'+finding.id);}}>≈ {finding.measurement!.value} {finding.measurement!.units === 'm' ? 'm' : 'su'}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed').map((finding,index)=><button type="button" key={finding.id} className={'blueprint-finding-pin severity-'+finding.severity+(selectedFindingId===finding.id?' selected':'')} ref={node=>{if(node)labels.current.set('finding-'+finding.id,node);else labels.current.delete('finding-'+finding.id);}} aria-label={finding.title} title={finding.title} onClick={()=>onSelectFinding(finding.id)}>{index+1}</button>)}</div>}
+    {ready && <div className="blueprint-labels">{snapshot.blueprint.rooms.map(room=><div key={room.id} className="blueprint-room-label" ref={node=>{if(node)labels.current.set('room-'+room.id,node);else labels.current.delete('room-'+room.id);}}>{room.name}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed'&&f.endAnchor&&f.measurement&&(selectedFindingId===f.id||snapshot.findings.filter(g=>g.endAnchor&&g.measurement).length<=3)).map(finding=><div key={'measure-'+finding.id} className="blueprint-measure-label" ref={node=>{if(node)labels.current.set('measure-'+finding.id,node);else labels.current.delete('measure-'+finding.id);}}>≈ {finding.measurement!.value} {finding.measurement!.units === 'm' ? 'm' : 'su'}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed').map((finding,index)=><button type="button" key={finding.id} className={'blueprint-finding-pin severity-'+finding.severity+(selectedFindingId===finding.id?' selected':'')} ref={node=>{if(node)labels.current.set('finding-'+finding.id,node);else labels.current.delete('finding-'+finding.id);}} aria-label={finding.title} title={finding.title} onClick={()=>onSelectFinding(finding.id)}>{index+1}</button>)}</div>}
     <button type="button" className="blueprint-reset" aria-label="Reset 3D blueprint camera" onClick={()=>runtime.current?.reset()}><RotateCcw size={13}/></button>
   </div>;
 }
