@@ -26,3 +26,9 @@ The user requested a dark dashboard and removal of the general sample-session ba
 ## Auditgon cutaway reference
 
 The user selected the blue architectural cutaway at https://view.promediaproductions.com/residence-blueprint/?detail=auto and supplied a screenshot. The blueprint renderer applies its navy grid, white structural edges, elevated roof-off perspective, room openings, and furnishing silhouettes to actual model data. It uses real interactive PlayCanvas meshes, not the reference illustration as a substitute for the user’s building. Furniture is rendered only when the generated model records its type, position, and dimensions. Unknown geometry stays unknown. The graphics engine is lazy-loaded as a single chunk to avoid an engine/viewer circular initialization dependency.
+
+## Black-and-white dashboard revision
+
+The dashboard chrome now uses a pure neutral scale: near-black surfaces, white ink, and grays mapped from the previous palette by perceived luminance. No lime, olive, rust, or amber remains in the dashboard. Status and severity are told apart by tone and treatment rather than hue: verified is a solid light pill with dark text, critical is solid white, major is solid mid-gray, and minor or blocked is outlined. The navy 3D blueprint cutaway, the splat viewer's own rendering, and the printable report keep their existing palettes.
+
+The heatmap feature was removed to narrow the product. The reference map, 3D blueprint, and report no longer offer a coverage tint; coverage is read from the checklist, room progress rows, and finding markers.

@@ -72,7 +72,7 @@ export interface InspectionSnapshot {
 export interface SceneViewerProps {
   snapshot: InspectionSnapshot; selectedFindingId: string | null;
   onSelectFinding: (id: string) => void; selectedRoomId?: string | null;
-  viewMode?: ViewMode; showMarkers?: boolean; showPath?: boolean; heatmap?: boolean;
+  viewMode?: ViewMode; showMarkers?: boolean; showPath?: boolean;
   onAddMarker?: (anchor: Vec3, context?: MarkerContext) => void; className?: string; referenceOnly?: boolean;
 }
 export interface ApiError { error: string; code?: string }

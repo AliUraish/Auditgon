@@ -66,6 +66,7 @@ class Room(StrictModel):
     adjacentRoomIds: List[Identifier] = Field(max_length=40)
     floorElevation: Optional[Coordinate] = None
     height: Optional[confloat(strict=True, gt=0, le=1000, allow_inf_nan=False)] = None
+    designRoomId: Optional[ShortIdentifier] = None
 
 
 class BlueprintFeature(StrictModel):
@@ -193,12 +194,27 @@ class AgentToolResult(StrictModel):
     error: Optional[constr(max_length=1000)] = None
 
 
+class ImageRegion(StrictModel):
+    evidenceId: Identifier
+    box: Tuple[PixelNumber, PixelNumber, PixelNumber, PixelNumber]
+    label: Optional[constr(strip_whitespace=True, max_length=120)] = None
+
+    @model_validator(mode="after")
+    def ordered(self):
+        if self.box[2] <= self.box[0] or self.box[3] <= self.box[1]:
+            raise ValueError("Image box must be [x0, y0, x1, y1] with x1 > x0 and y1 > y0.")
+        return self
+
+
 class AgentFinding(StrictModel):
     title: constr(min_length=1, max_length=180)
     severity: Severity
     expected: RequiredText
     nextAction: RequiredText
     anchor: Optional[Vec3] = None
+    endAnchor: Optional[Vec3] = None
+    region: Optional[List[Vec3]] = Field(default=None, min_length=3, max_length=12)
+    imageRegions: Optional[List[ImageRegion]] = Field(default=None, max_length=4)
     cameraPosition: Optional[Vec3] = None
     cameraTarget: Optional[Vec3] = None
 
@@ -206,7 +222,7 @@ class AgentFinding(StrictModel):
 class AgentResult(StrictModel):
     itemId: Identifier
     status: Literal["observing", "pass", "finding", "blocked"]
-    basis: Optional[Literal["visual", "metric", "operation"]] = None
+    basis: Optional[Literal["visual", "layout", "metric", "operation"]] = None
     observed: RequiredText
     reason: RequiredText
     evidenceIds: List[Identifier] = Field(default_factory=list, max_length=8)
@@ -220,8 +236,21 @@ class DiscoveredItem(StrictModel):
     reason: constr(strip_whitespace=True, min_length=4, max_length=1200)
 
 
+Move = confloat(strict=True, ge=-50, le=50, allow_inf_nan=False)
+Angle = confloat(strict=True, ge=-180, le=180, allow_inf_nan=False)
+
+
 class ViewerArgs(StrictModel):
     position: Optional[Vec3] = None
     target: Optional[Vec3] = None
     points: Optional[List[Pixel]] = Field(default=None, min_length=1, max_length=64)
     label: Optional[constr(max_length=180)] = None
+    turn: Optional[Angle] = None
+    tilt: Optional[Angle] = None
+    forward: Optional[Move] = None
+    strafe: Optional[Move] = None
+    rise: Optional[Move] = None
+
+    @property
+    def moves(self) -> bool:
+        return any(value for value in (self.turn, self.tilt, self.forward, self.strafe, self.rise))

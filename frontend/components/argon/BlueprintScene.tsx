@@ -9,7 +9,7 @@ import type { AppBase, Entity } from 'playcanvas';
 type Props = SceneViewerProps & { zoom: number; rotation: number };
 type Runtime = { app: AppBase; camera: Entity; update: () => void; reset: () => void };
 
-export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindingId, onSelectFinding, heatmap = false, showMarkers = true, showPath = true, viewMode, zoom, rotation }: Props) {
+export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindingId, onSelectFinding, showMarkers = true, showPath = true, viewMode, zoom, rotation }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const runtime = useRef<Runtime | null>(null);
   const labels = useRef(new Map<string, HTMLDivElement | HTMLButtonElement>());
@@ -19,7 +19,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
   const [ready, setReady] = useState(false);
   const [visible, setVisible] = useState(!document.hidden);
   const hasRooms = snapshot.blueprint.rooms.length > 0;
-  const geometryKey = JSON.stringify({ model: snapshot.blueprint, heatmap, selectedRoomId, findings: snapshot.findings.map(f => [f.id,f.status,f.roomId]), checks: heatmap ? snapshot.checklist.map(c => [c.roomId,c.status]) : [] });
+  const geometryKey = JSON.stringify({ model: snapshot.blueprint, selectedRoomId, findings: snapshot.findings.map(f => [f.id,f.status,f.roomId]) });
   const annotationKey = JSON.stringify({ findings: snapshot.findings.map(f => [f.id,f.anchor,f.status]), path: showPath ? snapshot.path : [], showMarkers });
 
   useEffect(() => {
@@ -49,7 +49,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
         const { AppBase, AppOptions, CameraComponentSystem, RenderComponentSystem, LightComponentSystem, createGraphicsDevice, DEVICETYPE_WEBGL2, Entity, Color, PROJECTION_ORTHOGRAPHIC, StandardMaterial, CULLFACE_NONE, BLEND_NORMAL, Mesh, MeshInstance, PRIMITIVE_TRIANGLES, PRIMITIVE_LINES, Vec3, RESOLUTION_FIXED } = await import('playcanvas');
         const pc = { AppBase, AppOptions, CameraComponentSystem, RenderComponentSystem, LightComponentSystem, createGraphicsDevice, DEVICETYPE_WEBGL2, Entity, Color, PROJECTION_ORTHOGRAPHIC, StandardMaterial, CULLFACE_NONE, BLEND_NORMAL, Mesh, MeshInstance, PRIMITIVE_TRIANGLES, PRIMITIVE_LINES, Vec3, RESOLUTION_FIXED };
         if (cancelled) return;
-        const data = buildBlueprintGeometry(snapshot, heatmap, selectedRoomId);
+        const data = buildBlueprintGeometry(snapshot, selectedRoomId);
         const canvas = document.createElement('canvas');
         canvas.setAttribute('aria-hidden', 'true');
         canvas.style.cssText = 'width:100%;height:100%;display:block;touch-action:none';

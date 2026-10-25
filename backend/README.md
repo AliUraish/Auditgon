@@ -18,7 +18,7 @@ backend/.venv/bin/python -m pytest backend/tests -q
 
 ## Input-first flow
 
-Fresh projects are empty: no example house, synthetic findings, or preselected scan. The owner supplies a scan link and any useful materials. A blueprint is optional. Actual Gemini analysis reads attachments, captures scan views, samples approximate depth, derives connected rooms and observed furnishings, then creates meaningful inspection checks, a heatmap, persistent annotations and a draft3D blueprint.
+Fresh projects are empty: no example house, synthetic findings, or preselected scan. The owner supplies a scan link and any useful materials. A blueprint is optional. Actual Gemini analysis reads attachments, captures scan views, samples approximate depth, derives connected rooms and observed furnishings, then creates meaningful inspection checks, persistent annotations and a draft3D blueprint.
 
 `POST /api/project {}` starts an empty project. Active attachments are cleared; existing private owner files remain saved and are not silently attached to a different house. `PATCH /api/scene {sourceUrl, name?}` resolves a public SuperSplat link or stores a direct public HTTPS splat/progressive URL. Replacing the scene invalidates every previous room, check and finding while keeping current attachments. Repeating the same scene URL is idempotent and preserves audit output. Legacy sample-only bootstrap data migrates once to an empty project while preserving real owner uploads and native source observations. Existing real projects are preserved. An explicit development request `POST /api/inspection {action:"reset",mode:"demo"}` still loads the clearly labeled test workspace; it is not the product default.
 

@@ -49,7 +49,7 @@ def initial_state(now: Optional[int] = None) -> State:
     current = now_ms() if now is None else now
     return {"projectVersion": 2, "elapsedMs": 0, "activeSince": None, "snapshot": {
         "id": uid(), "name": "Untitled audit", "address": "Add a scan and any reference materials", "mode": "managed", "status": "ready", "createdAt": iso(current), "updatedAt": iso(current), "startedAt": None, "elapsedSeconds": 0,
-        "currentRoomId": "", "currentItemId": None, "blueprint": empty_blueprint(), "checklist": [], "findings": [], "events": [], "uploads": [], "path": [], "corrections": 0, "revision": 1, "verdict": "Incomplete",
+        "currentRoomId": "", "currentItemId": None, "blueprint": empty_blueprint(), "checklist": [], "findings": [], "events": [], "uploads": [], "path": [], "trail": [], "corrections": 0, "revision": 1, "verdict": "Incomplete",
         "scan": {"sourceUrl": "", "assetUrl": None, "name": "No scan selected", "calibrated": False, "scale": 1, "version": "unconfigured", "configured": False, "posterUrl": None},
         "capabilities": {"managedAgent": False, "uploads": True, "persistence": True, "providerMessage": "Add a scan link and optional materials to begin."},
     }}
@@ -179,17 +179,33 @@ def import_blueprint(state: State, blueprint: Blueprint, now: Optional[int] = No
     snapshot.pop("agent", None)
     state.pop("provider", None)
     state["elapsedMs"] = 0
-    if model["generatedFrom"] == "materials" and model["metricStatus"] == "design-dimensions":
+    previous_checks = snapshot.get("checklist", [])
+    if model["generatedFrom"] == "materials":
         state["designReference"] = deepcopy(model)
+        design, room_map, carry = model, {room["id"]: room["id"] for room in model["rooms"]}, {}
+    elif state.get("designReference"):
+        design = state["designReference"]
+        room_map = {room["designRoomId"]: room["id"] for room in model["rooms"] if room.get("designRoomId")}
+        carry = {item["id"]: item for item in previous_checks}
+    else:
+        design, room_map, carry = None, {}, {}
     snapshot["scan"]["calibrated"] = False
     snapshot["checklist"] = [{"id": "check-" + feature["id"], "roomId": feature["roomId"], "label": feature["label"], "category": feature["kind"], "status": "pending", "anchor": feature["position"],
-                              "expected": "{} {}{}".format(feature["expected"], feature.get("unit", model["units"]), " · " + feature["source"] if feature.get("source") else "") if "expected" in feature else "No dimension specified; verify only what the reference supports."} for feature in model["features"] if feature["kind"] != "furniture"]
+                              "expected": "{} {}{}".format(feature["expected"], feature.get("unit", model["units"]), " · " + feature["source"] if feature.get("source") else "")} for feature in model["features"] if feature["kind"] != "furniture" and "expected" in feature]
     for room in model["rooms"]:
         snapshot["checklist"].extend([
             {"id": "visual-" + room["id"], "roomId": room["id"], "label": room["name"] + ": visible workmanship", "category": "Workmanship", "status": "pending", "anchor": room["center"], "expected": "Review visible finish, trim, covers, and hardware. Confirm candidates with useful photographs; not-visible does not mean missing."},
             {"id": "coverage-" + room["id"], "roomId": room["id"], "label": room["name"] + ": visual coverage", "category": "Visibility", "status": "pending", "anchor": room["center"], "expected": "Obtain useful views, document visible and occluded areas, and request missing captures."},
         ])
-    event(state, "plan", "Independent blueprint imported", "{} rooms and {} reference features. Previous sample results were removed. Extracted locations need review and registration.".format(len(model["rooms"]), len(model["features"])), now=now)
+    if design is not None:
+        snapshot["checklist"].extend(sketch_checks(design, model, room_map, carry))
+    snapshot["checklist"] = snapshot["checklist"][:600]
+    detail = "{} rooms and {} features from {}.".format(len(model["rooms"]), len(model["features"]), model["generatedFrom"])
+    if design is not None and model["generatedFrom"] == "scan":
+        detail += " {} of {} sketched rooms matched to observed rooms; sketch checks carried over.".format(len(room_map), len(design["rooms"]))
+    elif design is not None:
+        detail += " Sketch verification checks generated for every drawn room, connection, and feature."
+    event(state, "plan", "Sketch reference imported" if model["generatedFrom"] == "materials" else "Spatial model imported", detail + " Previous results were removed. Extracted locations need review; no construction has been verified.", now=now)
 
 
 def patch_finding(state: State, finding_id: str, patch: FindingPatch, now: Optional[int] = None) -> None:
@@ -235,6 +251,60 @@ def add_manual_finding(state: State, data: ManualFinding) -> None:
     item.update(findingId=finding_id, status="blocked", reason="Owner observation requires supporting capture and verification.")
     snapshot["verdict"] = verdict(snapshot)
     event(state, "finding", finding_id + " · owner observation", data.reason, {"roomId": data.roomId, "itemId": item["id"]})
+
+
+def sketch_checks(design: Dict[str, Any], model: Dict[str, Any], room_map: Dict[str, str], carry: Dict[str, Dict[str, Any]]) -> list:
+    """Verification items for every sketched room, connection, and feature, mapped onto observed rooms when matched."""
+    observed = {room["id"]: room for room in model["rooms"]}
+    names = {room["id"]: room["name"] for room in design["rooms"]}
+    identity = all(room_map.get(room["id"]) == room["id"] for room in design["rooms"])
+
+    def place(design_room_id: str):
+        mapped = room_map.get(design_room_id)
+        if mapped in observed:
+            return mapped, list(observed[mapped]["center"])
+        return "unassigned", [0, 0, 0]
+
+    def item(check_id, design_room_id, label, category, expected, anchor=None):
+        room_id, center = place(design_room_id)
+        entry = {"id": check_id, "roomId": room_id, "designRoomId": design_room_id, "label": label, "category": category, "status": "pending", "anchor": anchor or center, "expected": expected}
+        if room_id == "unassigned":
+            entry["reason"] = "No observed room has been matched to this sketched room yet."
+        saved = carry.get(check_id)
+        if saved:
+            for key in ("status", "observed", "reason", "findingId"):
+                if key in saved:
+                    entry[key] = saved[key]
+        return entry
+
+    items = []
+    for room in design["rooms"]:
+        items.append(item("sketch-room-" + room["id"], room["id"], room["name"] + ": exists as sketched", "Layout", "The sketch shows {} ({}). Confirm a corresponding space is visible in the scan and record how it differs.".format(room["name"], room["level"]), list(room["center"]) if identity else None))
+    seen = set()
+    for room in design["rooms"]:
+        for other in room["adjacentRoomIds"]:
+            pair = tuple(sorted((room["id"], other)))
+            if pair in seen or other not in names:
+                continue
+            seen.add(pair)
+            items.append(item("sketch-link-" + pair[0] + "-" + pair[1], room["id"], "{} connects to {} as sketched".format(names[pair[0]], names[pair[1]]), "Layout", "The sketch draws an opening or passage between these rooms. Confirm it by moving through it or seeing both sides."))
+    for feature in design["features"]:
+        if feature["kind"] == "furniture":
+            continue
+        note = " A written dimension is checked separately and stays blocked without calibration." if "expected" in feature else ""
+        items.append(item("sketch-feature-" + feature["id"], feature["roomId"], "{}: present where sketched".format(feature["label"]), "Presence", "Sketched in {}. Confirm the {} exists at the drawn location and mark it in the scan.{}".format(names.get(feature["roomId"], feature["roomId"]), feature["kind"], note), list(feature["position"]) if identity else None))
+    return items
+
+
+def record_camera(state: State, position) -> None:
+    """Keep a bounded trail of real camera positions reported by the browser."""
+    if not position:
+        return
+    trail = state["snapshot"].setdefault("trail", [])
+    point = [float(value) for value in position]
+    if not trail or trail[-1] != point:
+        trail.append(point)
+    state["snapshot"]["trail"] = trail[-200:]
 
 
 def add_inspection_item(state: State, data: DiscoveredItem) -> Dict[str, Any]:

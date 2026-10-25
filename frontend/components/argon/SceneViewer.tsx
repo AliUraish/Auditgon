@@ -47,7 +47,7 @@ function settingsFor(annotations: Finding[], position?: Vec3, target?: Vec3) {
   };
 }
 
-export default function SceneViewer({ snapshot, selectedFindingId, onSelectFinding, selectedRoomId, viewMode = "perspective", showMarkers = true, showPath = true, heatmap = false, onAddMarker, className = "", referenceOnly = false }: SceneViewerProps) {
+export default function SceneViewer({ snapshot, selectedFindingId, onSelectFinding, selectedRoomId, viewMode = "perspective", showMarkers = true, showPath = true, onAddMarker, className = "", referenceOnly = false }: SceneViewerProps) {
   const configured = snapshot.scan.configured ?? Boolean(snapshot.scan.assetUrl);
   const [mode, setMode] = useState<Mode>(referenceOnly ? "reference" : "source");
   const [loadRequested, setLoadRequested] = useState(Boolean(configured && snapshot.scan.assetUrl && !referenceOnly));
@@ -276,12 +276,12 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
         <button type="button" className={isReference ? "active" : ""} onClick={() => { unload(); setMode("reference"); }}><Layers3 size={13} /> 3D blueprint</button>
       </div>
       {isReference ? <>
-        <BlueprintScene snapshot={snapshot} selectedFindingId={selectedFindingId} onSelectFinding={onSelectFinding} selectedRoomId={selectedRoomId} viewMode={viewMode} showMarkers={showMarkers} showPath={showPath} heatmap={heatmap} zoom={zoom} rotation={rotation}/>
+        <BlueprintScene snapshot={snapshot} selectedFindingId={selectedFindingId} onSelectFinding={onSelectFinding} selectedRoomId={selectedRoomId} viewMode={viewMode} showMarkers={showMarkers} showPath={showPath} zoom={zoom} rotation={rotation}/>
         <div className="as-reference-notice"><Box size={12}/>{snapshot.blueprint.rooms.length ? snapshot.blueprint.generatedFrom === "scan" ? "Scan-derived draft · approximate room geometry" : snapshot.blueprint.metricStatus === "unmeasured" || snapshot.blueprint.units === "scene" ? "Generated draft · dimensions unverified" : "Blueprint draft · review against source materials" : "Awaiting spatial model"}</div>
         <div className="as-reference-controls"><button type="button" aria-label="Zoom out 3D blueprint" onClick={()=>setZoom(v=>Math.max(0.5,v-0.15))}>−</button><span>{Math.round(zoom*100)}%</span><button type="button" aria-label="Zoom in 3D blueprint" onClick={()=>setZoom(v=>Math.min(3,v+0.15))}>+</button><button type="button" aria-label="Rotate 3D blueprint" onClick={()=>setRotation(v=>v+0.4)}><RotateCcw size={13}/></button></div>
         {onAddMarker && snapshot.blueprint.rooms.length > 0 && <button type="button" className="as-add-marker" onClick={()=>{const room=snapshot.blueprint.rooms.find(r=>r.id===selectedRoomId)||snapshot.blueprint.rooms[0];if(room)onAddMarker(room.center,{source:snapshot.blueprint.coordinateFrame === "scan" ? "scan" : "reference"});}}><MousePointer2 size={12}/> Mark selected room</button>}
       </> : <>
-        {!loadRequested && <div className="as-poster" style={{backgroundImage:snapshot.scan.posterUrl ? `linear-gradient(180deg,rgba(14,22,18,.1),rgba(14,22,18,.5)),url(${JSON.stringify(snapshot.scan.posterUrl)})` : "radial-gradient(ellipse at 40% 40%,#30412b,#151c19 70%)"}}>
+        {!loadRequested && <div className="as-poster" style={{backgroundImage:snapshot.scan.posterUrl ? `linear-gradient(180deg,rgba(10,10,10,.1),rgba(10,10,10,.55)),url(${JSON.stringify(snapshot.scan.posterUrl)})` : "radial-gradient(ellipse at 40% 40%,#3a3a3a,#0f0f0f 70%)"}}>
           <div className="as-load-card"><div className="as-load-icon"><ScanLine size={24}/></div><h3>{configured ? "Your space. A closer look." : "Start with your 3D scan."}</h3><p>{pausedForMemory ? "The scan was unloaded while away to release GPU memory." : configured ? "Explore your scan and every finding in one place." : "Add a scan link in Scan & materials. Auditgon will open it here and build the room map as it audits."}</p>{configured && <button type="button" onClick={()=>{setError(null);setPausedForMemory(false);setLoadRequested(true);}}><ScanLine size={14}/> Open embedded scan</button>}<span><ShieldCheck size={11}/> Progressive streaming · 750k active splat budget</span></div>
         </div>}
         <div className="as-canvas" ref={canvasHost} style={{display:loadRequested?"block":"none"}} />

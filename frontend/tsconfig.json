@@ -19,7 +19,6 @@
       "vite/client",
       "node"
     ],
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./*"

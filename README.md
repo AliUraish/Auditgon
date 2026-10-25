@@ -1,6 +1,6 @@
 # Auditgon · Spatial audits
 
-Give Auditgon a 3D scan link and any plans, photographs, or documents you have. It opens the scan in the workspace, uses visual tools to examine it, builds a room model and inspection agenda, and keeps the heatmap, spatial markers, and report linked to the same evidence.
+Give Auditgon a 3D scan link and any plans, photographs, or documents you have. It opens the scan in the workspace, uses visual tools to examine it, builds a room model and inspection agenda, and keeps the spatial markers and report linked to the same evidence.
 
 ```text
 Gemini_Argon/
@@ -38,7 +38,7 @@ Open [Auditgon](http://127.0.0.1:8001). Python serves both the built frontend an
 1. Paste a published SuperSplat scene link or supported streamed asset URL in **Scan & materials**. A compact scan file can also be uploaded.
 2. Add optional blueprints, photographs, PDFs, structured JSON, or text notes. Files are saved sequentially; photographs are resized before uploading.
 3. Choose **Open scan here** to explore, or **Start audit** to run the server-configured Gemini agent. There is no agent-connection step in the product.
-4. Review the generated rooms, heatmap, checklist, and findings. Each flag retains its reason, evidence, location, and review history.
+4. Review the generated rooms, checklist, and findings. Each flag retains its reason, evidence, location, and review history.
 5. Explore **3D blueprint** and export the report, drawing, spatial model, or draft 3D geometry.
 
 A scan-only audit can discover visible spaces and workmanship candidates. Supplied blueprints add independent design intent. Generated geometry is a draft: visual reconstruction and rendered depth alone do not establish surveyed dimensions or statutory compliance. Unsupported numeric or operation checks remain unresolved with specific evidence requests. A draft room layout is not represented as a measured as-built drawing. Repair costs and payment holdbacks require supplied quotes and contract terms.

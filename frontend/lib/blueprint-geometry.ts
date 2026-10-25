@@ -31,7 +31,7 @@ export function triangulate(polygon: [number, number][]): number[] {
   return result;
 }
 
-export function buildBlueprintGeometry(snapshot: InspectionSnapshot, heatmap: boolean, selectedRoomId?: string | null): BlueprintGeometry {
+export function buildBlueprintGeometry(snapshot: InspectionSnapshot, selectedRoomId?: string | null): BlueprintGeometry {
   const rooms = snapshot.blueprint.rooms;
   const all = rooms.flatMap(room => room.polygon);
   const minX = Math.min(...all.map(p => p[0])), maxX = Math.max(...all.map(p => p[0]));
@@ -62,9 +62,7 @@ export function buildBlueprintGeometry(snapshot: InspectionSnapshot, heatmap: bo
   const wallEdges = new Map<string, { a: [number,number]; b: [number,number]; floor: number; height: number; count: number }>();
   for (const room of rooms) {
     const f = room.floorElevation || 0;
-    const active = snapshot.findings.filter(item => item.roomId === room.id && ['open','review'].includes(item.status));
-    const roomChecks = snapshot.checklist.filter(item => item.roomId === room.id);
-    const color = heatmap ? active.length ? '#805848' : roomChecks.some(item => item.status === 'blocked') ? '#746244' : roomChecks.length && roomChecks.every(item => item.status === 'pass') ? '#366d72' : '#18466f' : selectedRoomId === room.id ? '#20578a' : colors.floor;
+    const color = selectedRoomId === room.id ? '#20578a' : colors.floor;
     const out = batch(color), base = out.positions.length / 3;
     room.polygon.forEach(([x,z]) => { out.positions.push(x,f,z); out.normals.push(0,1,0); });
     out.indices.push(...triangulate(room.polygon).map(i => i+base));
