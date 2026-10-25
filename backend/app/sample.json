@@ -1,0 +1,1275 @@
+{
+  "id": "428361f5-3075-4de1-8949-c301d714cd51",
+  "name": "Residence inspection",
+  "address": "Sample workspace · independent reference model",
+  "mode": "demo",
+  "status": "ready",
+  "createdAt": "2026-10-25T20:20:28.971Z",
+  "startedAt": null,
+  "updatedAt": "2026-10-25T20:20:28.971Z",
+  "elapsedSeconds": 0,
+  "currentRoomId": "kitchen",
+  "currentItemId": "CHK-007",
+  "blueprint": {
+    "id": "sample-plan",
+    "name": "Residence · sample reference plan",
+    "revision": "DEMO A-101",
+    "units": "m",
+    "isSample": true,
+    "rooms": [
+      {
+        "id": "living",
+        "name": "Living room",
+        "level": "Ground floor",
+        "area": 48,
+        "polygon": [
+          [
+            -8,
+            -6
+          ],
+          [
+            0,
+            -6
+          ],
+          [
+            0,
+            0
+          ],
+          [
+            -8,
+            0
+          ]
+        ],
+        "center": [
+          -4,
+          0,
+          -3
+        ],
+        "adjacentRoomIds": [
+          "kitchen",
+          "bedroom",
+          "hall"
+        ]
+      },
+      {
+        "id": "kitchen",
+        "name": "Kitchen",
+        "level": "Ground floor",
+        "area": 30,
+        "polygon": [
+          [
+            0,
+            -6
+          ],
+          [
+            5,
+            -6
+          ],
+          [
+            5,
+            0
+          ],
+          [
+            0,
+            0
+          ]
+        ],
+        "center": [
+          2.5,
+          0,
+          -3
+        ],
+        "adjacentRoomIds": [
+          "living",
+          "dining",
+          "hall"
+        ]
+      },
+      {
+        "id": "dining",
+        "name": "Dining room",
+        "level": "Ground floor",
+        "area": 18,
+        "polygon": [
+          [
+            5,
+            -6
+          ],
+          [
+            8,
+            -6
+          ],
+          [
+            8,
+            0
+          ],
+          [
+            5,
+            0
+          ]
+        ],
+        "center": [
+          6.5,
+          0,
+          -3
+        ],
+        "adjacentRoomIds": [
+          "kitchen",
+          "bath"
+        ]
+      },
+      {
+        "id": "bedroom",
+        "name": "Primary bedroom",
+        "level": "Ground floor",
+        "area": 36,
+        "polygon": [
+          [
+            -8,
+            0
+          ],
+          [
+            -2,
+            0
+          ],
+          [
+            -2,
+            6
+          ],
+          [
+            -8,
+            6
+          ]
+        ],
+        "center": [
+          -5,
+          0,
+          3
+        ],
+        "adjacentRoomIds": [
+          "living",
+          "hall"
+        ]
+      },
+      {
+        "id": "hall",
+        "name": "Hall & stair",
+        "level": "Ground floor",
+        "area": 42,
+        "polygon": [
+          [
+            -2,
+            0
+          ],
+          [
+            5,
+            0
+          ],
+          [
+            5,
+            6
+          ],
+          [
+            -2,
+            6
+          ]
+        ],
+        "center": [
+          1.5,
+          0,
+          3
+        ],
+        "adjacentRoomIds": [
+          "living",
+          "kitchen",
+          "bedroom",
+          "bath"
+        ]
+      },
+      {
+        "id": "bath",
+        "name": "Bathroom",
+        "level": "Ground floor",
+        "area": 18,
+        "polygon": [
+          [
+            5,
+            0
+          ],
+          [
+            8,
+            0
+          ],
+          [
+            8,
+            6
+          ],
+          [
+            5,
+            6
+          ]
+        ],
+        "center": [
+          6.5,
+          0,
+          3
+        ],
+        "adjacentRoomIds": [
+          "hall",
+          "dining"
+        ]
+      }
+    ],
+    "features": [
+      {
+        "id": "living-wall",
+        "roomId": "living",
+        "kind": "wall",
+        "label": "Living room north wall",
+        "position": [
+          -4,
+          1.4,
+          -6
+        ],
+        "expected": 8,
+        "unit": "m",
+        "source": "Synthetic reference A-101"
+      },
+      {
+        "id": "living-ceiling",
+        "roomId": "living",
+        "kind": "ceiling",
+        "label": "Living room ceiling",
+        "position": [
+          -4,
+          3.8,
+          -3
+        ],
+        "expected": 3.8,
+        "unit": "m",
+        "source": "Synthetic section A-301"
+      },
+      {
+        "id": "kitchen-wall",
+        "roomId": "kitchen",
+        "kind": "wall",
+        "label": "Kitchen north wall",
+        "position": [
+          2.5,
+          1.4,
+          -6
+        ],
+        "expected": 5,
+        "unit": "m",
+        "source": "Synthetic reference A-101"
+      },
+      {
+        "id": "kitchen-ceiling",
+        "roomId": "kitchen",
+        "kind": "ceiling",
+        "label": "Kitchen ceiling",
+        "position": [
+          2.5,
+          2.7,
+          -3
+        ],
+        "expected": 2.7,
+        "unit": "m",
+        "source": "Synthetic section A-301"
+      },
+      {
+        "id": "dining-wall",
+        "roomId": "dining",
+        "kind": "wall",
+        "label": "Dining room north wall",
+        "position": [
+          6.5,
+          1.4,
+          -6
+        ],
+        "expected": 3,
+        "unit": "m",
+        "source": "Synthetic reference A-101"
+      },
+      {
+        "id": "dining-ceiling",
+        "roomId": "dining",
+        "kind": "ceiling",
+        "label": "Dining room ceiling",
+        "position": [
+          6.5,
+          2.7,
+          -3
+        ],
+        "expected": 2.7,
+        "unit": "m",
+        "source": "Synthetic section A-301"
+      },
+      {
+        "id": "bedroom-wall",
+        "roomId": "bedroom",
+        "kind": "wall",
+        "label": "Primary bedroom north wall",
+        "position": [
+          -5,
+          1.4,
+          0
+        ],
+        "expected": 6,
+        "unit": "m",
+        "source": "Synthetic reference A-101"
+      },
+      {
+        "id": "bedroom-ceiling",
+        "roomId": "bedroom",
+        "kind": "ceiling",
+        "label": "Primary bedroom ceiling",
+        "position": [
+          -5,
+          2.7,
+          3
+        ],
+        "expected": 2.7,
+        "unit": "m",
+        "source": "Synthetic section A-301"
+      },
+      {
+        "id": "hall-wall",
+        "roomId": "hall",
+        "kind": "wall",
+        "label": "Hall & stair north wall",
+        "position": [
+          1.5,
+          1.4,
+          0
+        ],
+        "expected": 7,
+        "unit": "m",
+        "source": "Synthetic reference A-101"
+      },
+      {
+        "id": "hall-ceiling",
+        "roomId": "hall",
+        "kind": "ceiling",
+        "label": "Hall & stair ceiling",
+        "position": [
+          1.5,
+          2.7,
+          3
+        ],
+        "expected": 2.7,
+        "unit": "m",
+        "source": "Synthetic section A-301"
+      },
+      {
+        "id": "bath-wall",
+        "roomId": "bath",
+        "kind": "wall",
+        "label": "Bathroom north wall",
+        "position": [
+          6.5,
+          1.4,
+          0
+        ],
+        "expected": 3,
+        "unit": "m",
+        "source": "Synthetic reference A-101"
+      },
+      {
+        "id": "bath-ceiling",
+        "roomId": "bath",
+        "kind": "ceiling",
+        "label": "Bathroom ceiling",
+        "position": [
+          6.5,
+          2.7,
+          3
+        ],
+        "expected": 2.7,
+        "unit": "m",
+        "source": "Synthetic section A-301"
+      },
+      {
+        "id": "kitchen-island",
+        "roomId": "kitchen",
+        "kind": "island",
+        "label": "Kitchen island",
+        "position": [
+          2.3,
+          0.9,
+          -3
+        ],
+        "dimensions": [
+          2.1,
+          0.9,
+          1.05
+        ],
+        "expected": 1.1,
+        "unit": "m",
+        "source": "Synthetic detail A-501/2"
+      },
+      {
+        "id": "bedroom-door",
+        "roomId": "bedroom",
+        "kind": "door",
+        "label": "Primary bedroom doorway",
+        "position": [
+          -2,
+          1.05,
+          3
+        ],
+        "dimensions": [
+          0.9,
+          2.1,
+          0.15
+        ],
+        "expected": 0.9,
+        "unit": "m",
+        "source": "Synthetic door schedule D-03"
+      },
+      {
+        "id": "hall-stair",
+        "roomId": "hall",
+        "kind": "stair",
+        "label": "Stair flight",
+        "position": [
+          2.8,
+          0.8,
+          3.8
+        ],
+        "dimensions": [
+          1.1,
+          1.6,
+          2.8
+        ],
+        "expected": 0.175,
+        "unit": "m",
+        "source": "Synthetic stair detail A-402"
+      },
+      {
+        "id": "living-window",
+        "roomId": "living",
+        "kind": "window",
+        "label": "Living glazing",
+        "position": [
+          -8,
+          1.4,
+          -3
+        ],
+        "dimensions": [
+          0.1,
+          2.2,
+          3.4
+        ],
+        "source": "Synthetic elevation A-201"
+      },
+      {
+        "id": "bedroom-window",
+        "roomId": "bedroom",
+        "kind": "window",
+        "label": "Bedroom window",
+        "position": [
+          -8,
+          1.4,
+          3
+        ],
+        "dimensions": [
+          0.1,
+          1.2,
+          1.6
+        ],
+        "source": "Synthetic window schedule W-02"
+      }
+    ]
+  },
+  "checklist": [
+    {
+      "id": "CHK-001",
+      "roomId": "living",
+      "label": "North wall alignment",
+      "category": "Geometry",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        -4,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-002",
+      "roomId": "living",
+      "label": "Glazing location",
+      "category": "Openings",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        -4,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-003",
+      "roomId": "living",
+      "label": "Vaulted ceiling profile",
+      "category": "Ceilings",
+      "status": "finding",
+      "expected": "Vault rise 0.80 m · sample A-301",
+      "observed": "Illustrative rise 0.66 m ± 0.03 m",
+      "reason": "A synthetic ceiling profile differs from the intended section. The example demonstrates a section-to-observation comparison.",
+      "anchor": [
+        -4.5,
+        3.5,
+        -3.3
+      ],
+      "findingId": "F-002"
+    },
+    {
+      "id": "CHK-004",
+      "roomId": "living",
+      "label": "Floor-to-ceiling height",
+      "category": "Geometry",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        -4,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-005",
+      "roomId": "living",
+      "label": "Wall behind sofa",
+      "category": "Visibility",
+      "status": "blocked",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "reason": "Furniture hides this wall; request another capture.",
+      "anchor": [
+        -4,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-006",
+      "roomId": "kitchen",
+      "label": "Island length",
+      "category": "Geometry",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        2.5,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-007",
+      "roomId": "kitchen",
+      "label": "Island circulation clearance",
+      "category": "Clearances",
+      "status": "finding",
+      "expected": "1.10 m minimum · sample A-501/2",
+      "observed": "0.94 m ± 0.02 m",
+      "reason": "In this synthetic example, the full measurement interval falls below the specified circulation clearance.",
+      "anchor": [
+        0.85,
+        0.95,
+        -3
+      ],
+      "findingId": "F-001"
+    },
+    {
+      "id": "CHK-008",
+      "roomId": "kitchen",
+      "label": "Cabinet run alignment",
+      "category": "Geometry",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        2.5,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-009",
+      "roomId": "kitchen",
+      "label": "Window position",
+      "category": "Openings",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        2.5,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-010",
+      "roomId": "kitchen",
+      "label": "Outlet faceplate finish",
+      "category": "Workmanship",
+      "status": "finding",
+      "expected": "Finished outlet with cover installed",
+      "observed": "Synthetic candidate; confirmation photograph required",
+      "reason": "The sample observation illustrates an absent cover candidate. Reconstruction blur alone would not confirm a missing component.",
+      "anchor": [
+        4.85,
+        1.2,
+        -5.6
+      ],
+      "findingId": "F-005"
+    },
+    {
+      "id": "CHK-011",
+      "roomId": "dining",
+      "label": "East wall alignment",
+      "category": "Geometry",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        6.5,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-012",
+      "roomId": "dining",
+      "label": "Doorway location",
+      "category": "Openings",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        6.5,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-013",
+      "roomId": "dining",
+      "label": "Ceiling height",
+      "category": "Ceilings",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        6.5,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-014",
+      "roomId": "dining",
+      "label": "Floor transition",
+      "category": "Workmanship",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        6.5,
+        0,
+        -3
+      ]
+    },
+    {
+      "id": "CHK-015",
+      "roomId": "bedroom",
+      "label": "Door clear opening",
+      "category": "Clearances",
+      "status": "finding",
+      "expected": "0.90 m clear opening · sample D-03",
+      "observed": "0.82 m ± 0.01 m",
+      "reason": "The synthetic clear-opening measurement is narrower than the independent sample door schedule; this is not a legal code determination.",
+      "anchor": [
+        -2,
+        1.05,
+        3
+      ],
+      "findingId": "F-003"
+    },
+    {
+      "id": "CHK-016",
+      "roomId": "bedroom",
+      "label": "Window position",
+      "category": "Openings",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        -5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-017",
+      "roomId": "bedroom",
+      "label": "Window escape operation",
+      "category": "Safety review",
+      "status": "blocked",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "reason": "A static scan cannot verify window operation; request an operability check.",
+      "anchor": [
+        -5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-018",
+      "roomId": "bedroom",
+      "label": "Room width",
+      "category": "Geometry",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        -5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-019",
+      "roomId": "bedroom",
+      "label": "Baseboard continuity",
+      "category": "Workmanship",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        -5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-020",
+      "roomId": "hall",
+      "label": "Stair riser consistency",
+      "category": "Safety review",
+      "status": "finding",
+      "expected": "175 mm nominal; max variation 5 mm · sample A-402",
+      "observed": "Riser 5: 189 mm; other risers: 175 mm",
+      "reason": "The synthetic fifth riser differs from the rest of the flight by 14 mm. The supplied sample stair specification allows 5 mm.",
+      "anchor": [
+        2.8,
+        0.85,
+        2.6
+      ],
+      "findingId": "F-004"
+    },
+    {
+      "id": "CHK-021",
+      "roomId": "hall",
+      "label": "Hallway width",
+      "category": "Clearances",
+      "status": "pass",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "observed": "Synthetic example within reference tolerance.",
+      "anchor": [
+        1.5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-022",
+      "roomId": "hall",
+      "label": "Handrail height",
+      "category": "Safety review",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        1.5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-023",
+      "roomId": "hall",
+      "label": "Stair headroom",
+      "category": "Safety review",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        1.5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-024",
+      "roomId": "hall",
+      "label": "Landing geometry",
+      "category": "Geometry",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        1.5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-025",
+      "roomId": "bath",
+      "label": "Door position",
+      "category": "Openings",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        6.5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-026",
+      "roomId": "bath",
+      "label": "Ceiling height",
+      "category": "Ceilings",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        6.5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-027",
+      "roomId": "bath",
+      "label": "Wall finish continuity",
+      "category": "Workmanship",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        6.5,
+        0,
+        3
+      ]
+    },
+    {
+      "id": "CHK-028",
+      "roomId": "bath",
+      "label": "Floor area",
+      "category": "Geometry",
+      "status": "pending",
+      "expected": "Verify against synthetic reference drawing; all sample values are illustrative.",
+      "anchor": [
+        6.5,
+        0,
+        3
+      ]
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "itemId": "CHK-007",
+      "roomId": "kitchen",
+      "title": "Island clearance below plan",
+      "category": "Design deviation",
+      "severity": "major",
+      "reason": "In this synthetic example, the full measurement interval falls below the specified circulation clearance.",
+      "expected": "1.10 m minimum · sample A-501/2",
+      "observed": "0.94 m ± 0.02 m",
+      "uncertainty": "Illustrative ±2 cm; not measured from the embedded residence.",
+      "nextAction": "Confirm the clear distance on site and review island placement.",
+      "anchor": [
+        0.85,
+        0.95,
+        -3
+      ],
+      "endAnchor": [
+        1.79,
+        0.95,
+        -3
+      ],
+      "cameraPosition": [
+        -1.5,
+        2.2,
+        -0.3
+      ],
+      "cameraTarget": [
+        1.2,
+        0.95,
+        -3
+      ],
+      "status": "open",
+      "isSample": true,
+      "createdAt": "2026-10-25T20:20:28.971Z",
+      "updatedAt": "2026-10-25T20:20:28.971Z",
+      "history": [
+        {
+          "at": "2026-10-25T20:20:28.971Z",
+          "status": "open",
+          "note": "Loaded as a clearly labeled synthetic example; no claim about the source residence."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "F-001-drawing",
+          "label": "Sample reference diagram",
+          "kind": "drawing",
+          "imageUrl": "/api/report?format=svg&finding=F-001",
+          "description": "Synthetic reference-model location, not an image captured from the real scan.",
+          "cameraPosition": [
+            -1.5,
+            2.2,
+            -0.3
+          ],
+          "cameraTarget": [
+            1.2,
+            0.95,
+            -3
+          ]
+        },
+        {
+          "id": "F-001-measurement",
+          "label": "Illustrative measurement",
+          "kind": "measurement",
+          "description": "1.10 m minimum · sample A-501/2. Observed: 0.94 m ± 0.02 m. All values are synthetic."
+        }
+      ]
+    },
+    {
+      "id": "F-002",
+      "itemId": "CHK-003",
+      "roomId": "living",
+      "title": "Ceiling profile needs review",
+      "category": "Design deviation",
+      "severity": "minor",
+      "reason": "A synthetic ceiling profile differs from the intended section. The example demonstrates a section-to-observation comparison.",
+      "expected": "Vault rise 0.80 m · sample A-301",
+      "observed": "Illustrative rise 0.66 m ± 0.03 m",
+      "uncertainty": "Synthetic profile only; the real ceiling remains unmeasured.",
+      "nextAction": "Obtain calibrated ceiling geometry and confirm the intended section.",
+      "anchor": [
+        -4.5,
+        3.5,
+        -3.3
+      ],
+      "cameraPosition": [
+        -3,
+        1.8,
+        -0.1
+      ],
+      "cameraTarget": [
+        -4.5,
+        3.5,
+        -3.3
+      ],
+      "status": "open",
+      "isSample": true,
+      "createdAt": "2026-10-25T20:20:28.971Z",
+      "updatedAt": "2026-10-25T20:20:28.971Z",
+      "history": [
+        {
+          "at": "2026-10-25T20:20:28.971Z",
+          "status": "open",
+          "note": "Loaded as a clearly labeled synthetic example; no claim about the source residence."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "F-002-drawing",
+          "label": "Sample reference diagram",
+          "kind": "drawing",
+          "imageUrl": "/api/report?format=svg&finding=F-002",
+          "description": "Synthetic reference-model location, not an image captured from the real scan.",
+          "cameraPosition": [
+            -3,
+            1.8,
+            -0.1
+          ],
+          "cameraTarget": [
+            -4.5,
+            3.5,
+            -3.3
+          ]
+        },
+        {
+          "id": "F-002-measurement",
+          "label": "Illustrative measurement",
+          "kind": "measurement",
+          "description": "Vault rise 0.80 m · sample A-301. Observed: Illustrative rise 0.66 m ± 0.03 m. All values are synthetic."
+        }
+      ]
+    },
+    {
+      "id": "F-003",
+      "itemId": "CHK-015",
+      "roomId": "bedroom",
+      "title": "Bedroom opening narrower than plan",
+      "category": "Design deviation",
+      "severity": "major",
+      "reason": "The synthetic clear-opening measurement is narrower than the independent sample door schedule; this is not a legal code determination.",
+      "expected": "0.90 m clear opening · sample D-03",
+      "observed": "0.82 m ± 0.01 m",
+      "uncertainty": "Illustrative ±1 cm; door operation must be physically verified.",
+      "nextAction": "Measure with the door open and reconcile the frame with the schedule.",
+      "anchor": [
+        -2,
+        1.05,
+        3
+      ],
+      "endAnchor": [
+        -2.82,
+        1.05,
+        3
+      ],
+      "cameraPosition": [
+        -0.1,
+        1.7,
+        4.8
+      ],
+      "cameraTarget": [
+        -2,
+        1.05,
+        3
+      ],
+      "status": "open",
+      "isSample": true,
+      "createdAt": "2026-10-25T20:20:28.971Z",
+      "updatedAt": "2026-10-25T20:20:28.971Z",
+      "history": [
+        {
+          "at": "2026-10-25T20:20:28.971Z",
+          "status": "open",
+          "note": "Loaded as a clearly labeled synthetic example; no claim about the source residence."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "F-003-drawing",
+          "label": "Sample reference diagram",
+          "kind": "drawing",
+          "imageUrl": "/api/report?format=svg&finding=F-003",
+          "description": "Synthetic reference-model location, not an image captured from the real scan.",
+          "cameraPosition": [
+            -0.1,
+            1.7,
+            4.8
+          ],
+          "cameraTarget": [
+            -2,
+            1.05,
+            3
+          ]
+        },
+        {
+          "id": "F-003-measurement",
+          "label": "Illustrative measurement",
+          "kind": "measurement",
+          "description": "0.90 m clear opening · sample D-03. Observed: 0.82 m ± 0.01 m. All values are synthetic."
+        }
+      ]
+    },
+    {
+      "id": "F-004",
+      "itemId": "CHK-020",
+      "roomId": "hall",
+      "title": "Uneven stair riser in sample",
+      "category": "Safety review",
+      "severity": "major",
+      "reason": "The synthetic fifth riser differs from the rest of the flight by 14 mm. The supplied sample stair specification allows 5 mm.",
+      "expected": "175 mm nominal; max variation 5 mm · sample A-402",
+      "observed": "Riser 5: 189 mm; other risers: 175 mm",
+      "uncertainty": "Synthetic dimensions; no real stair measurement performed.",
+      "rule": {
+        "label": "Sample project stair specification",
+        "applicability": "Demonstration specification only; jurisdiction and applicable code are not supplied."
+      },
+      "nextAction": "Check every riser using a calibrated physical measurement and review the flight.",
+      "anchor": [
+        2.8,
+        0.85,
+        2.6
+      ],
+      "cameraPosition": [
+        0.4,
+        2,
+        1.2
+      ],
+      "cameraTarget": [
+        2.8,
+        0.85,
+        2.6
+      ],
+      "status": "open",
+      "isSample": true,
+      "createdAt": "2026-10-25T20:20:28.971Z",
+      "updatedAt": "2026-10-25T20:20:28.971Z",
+      "history": [
+        {
+          "at": "2026-10-25T20:20:28.971Z",
+          "status": "open",
+          "note": "Loaded as a clearly labeled synthetic example; no claim about the source residence."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "F-004-drawing",
+          "label": "Sample reference diagram",
+          "kind": "drawing",
+          "imageUrl": "/api/report?format=svg&finding=F-004",
+          "description": "Synthetic reference-model location, not an image captured from the real scan.",
+          "cameraPosition": [
+            0.4,
+            2,
+            1.2
+          ],
+          "cameraTarget": [
+            2.8,
+            0.85,
+            2.6
+          ]
+        },
+        {
+          "id": "F-004-measurement",
+          "label": "Illustrative measurement",
+          "kind": "measurement",
+          "description": "175 mm nominal; max variation 5 mm · sample A-402. Observed: Riser 5: 189 mm; other risers: 175 mm. All values are synthetic."
+        }
+      ]
+    },
+    {
+      "id": "F-005",
+      "itemId": "CHK-010",
+      "roomId": "kitchen",
+      "title": "Possible missing outlet cover",
+      "category": "Workmanship",
+      "severity": "minor",
+      "reason": "The sample observation illustrates an absent cover candidate. Reconstruction blur alone would not confirm a missing component.",
+      "expected": "Finished outlet with cover installed",
+      "observed": "Synthetic candidate; confirmation photograph required",
+      "uncertainty": "Needs evidence; not a confirmed defect in the supplied scan.",
+      "nextAction": "Capture a close photograph of the outlet before assigning repair work.",
+      "anchor": [
+        4.85,
+        1.2,
+        -5.6
+      ],
+      "cameraPosition": [
+        2.9,
+        1.7,
+        -3.4
+      ],
+      "cameraTarget": [
+        4.85,
+        1.2,
+        -5.6
+      ],
+      "status": "review",
+      "isSample": true,
+      "createdAt": "2026-10-25T20:20:28.971Z",
+      "updatedAt": "2026-10-25T20:20:28.971Z",
+      "history": [
+        {
+          "at": "2026-10-25T20:20:28.971Z",
+          "status": "review",
+          "note": "Loaded as a clearly labeled synthetic example; no claim about the source residence."
+        }
+      ],
+      "evidence": [
+        {
+          "id": "F-005-drawing",
+          "label": "Sample reference diagram",
+          "kind": "drawing",
+          "imageUrl": "/api/report?format=svg&finding=F-005",
+          "description": "Synthetic reference-model location, not an image captured from the real scan.",
+          "cameraPosition": [
+            2.9,
+            1.7,
+            -3.4
+          ],
+          "cameraTarget": [
+            4.85,
+            1.2,
+            -5.6
+          ]
+        },
+        {
+          "id": "F-005-measurement",
+          "label": "Illustrative measurement",
+          "kind": "measurement",
+          "description": "Finished outlet with cover installed. Observed: Synthetic candidate; confirmation photograph required. All values are synthetic."
+        }
+      ]
+    }
+  ],
+  "uploads": [],
+  "path": [
+    [
+      -4,
+      0,
+      -3
+    ],
+    [
+      -1,
+      0,
+      -3
+    ],
+    [
+      2.5,
+      0,
+      -3
+    ]
+  ],
+  "corrections": 0,
+  "revision": 1,
+  "verdict": "Incomplete",
+  "scan": {
+    "sourceUrl": "https://superspl.at/scene/9d09ab82",
+    "assetUrl": null,
+    "name": "Private Residence Interior",
+    "calibrated": false,
+    "scale": 1,
+    "version": "source-9d09ab82"
+  },
+  "events": [
+    {
+      "id": "6ab93cb1-8879-4e95-bcd3-218bd3924fc3",
+      "at": "2026-10-25T20:20:28.971Z",
+      "kind": "system",
+      "title": "Sample workspace ready",
+      "detail": "28 illustrative checks and 5 synthetic findings show the complete review flow. They are not findings from the supplied residence.",
+      "isSample": true
+    },
+    {
+      "id": "80e52df3-4b69-4671-9598-75ef0c0d7188",
+      "at": "2026-10-25T20:20:28.971Z",
+      "kind": "plan",
+      "title": "Reference map prepared",
+      "detail": "Six connected rooms form the sample inspection agenda. Import an independent blueprint to start a real project.",
+      "isSample": true
+    },
+    {
+      "id": "a33746a8-4767-4a87-81fd-821a6a976d7a",
+      "at": "2026-10-25T20:20:28.971Z",
+      "kind": "system",
+      "title": "Original scan stays embedded",
+      "detail": "The 524 MB source is not downloaded or loaded automatically. Spatial sample annotations live in the separate reference model.",
+      "isSample": true
+    }
+  ],
+  "capabilities": {
+    "managedAgent": false,
+    "uploads": false,
+    "persistence": false,
+    "providerMessage": "Configure Gemini credentials to enable real blueprint analysis and Managed Agents."
+  }
+}
