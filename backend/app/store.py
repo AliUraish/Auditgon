@@ -45,6 +45,8 @@ class Store:
         state = json.loads(row["document"])
         if migrate_legacy_sample(state):
             self.save(owner, state)
+        state["snapshot"].setdefault("trail", [])
+        state["snapshot"].setdefault("agents", [])
         return state
 
     def save(self, owner: str, state: State) -> None:

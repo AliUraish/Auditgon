@@ -13,6 +13,8 @@ Pixel = Tuple[PixelNumber, PixelNumber]
 FindingStatus = Literal["open", "review", "resolved", "dismissed"]
 Severity = Literal["critical", "major", "minor"]
 RequiredText = constr(strip_whitespace=True, min_length=1, max_length=2000)
+Finish = Literal["wood", "tile", "carpet", "concrete", "stone", "paint", "plaster", "brick", "glass", "other"]
+HexColor = constr(pattern=r"^#[0-9a-fA-F]{6}$")
 
 
 class StrictModel(BaseModel):
@@ -20,7 +22,7 @@ class StrictModel(BaseModel):
 
 
 class Action(StrictModel):
-    action: Literal["start", "pause", "resume", "reset", "advance", "finalize"]
+    action: Literal["start", "pause", "resume", "reset", "advance", "finalize", "reaudit"]
     mode: Optional[Literal["demo", "managed"]] = None
 
 
@@ -67,6 +69,10 @@ class Room(StrictModel):
     floorElevation: Optional[Coordinate] = None
     height: Optional[confloat(strict=True, gt=0, le=1000, allow_inf_nan=False)] = None
     designRoomId: Optional[ShortIdentifier] = None
+    floorFinish: Optional[Finish] = None
+    wallFinish: Optional[Finish] = None
+    floorColor: Optional[HexColor] = None
+    wallColor: Optional[HexColor] = None
 
 
 class BlueprintFeature(StrictModel):
@@ -238,6 +244,17 @@ class DiscoveredItem(StrictModel):
 
 Move = confloat(strict=True, ge=-50, le=50, allow_inf_nan=False)
 Angle = confloat(strict=True, ge=-180, le=180, allow_inf_nan=False)
+
+
+class AgentDeploy(StrictModel):
+    role: Literal["finish-surveyor", "sketch-verifier", "measurer", "room-inspector"]
+    objective: constr(strip_whitespace=True, min_length=8, max_length=1200)
+    roomId: Optional[Identifier] = None
+    evidenceIds: List[Identifier] = Field(default_factory=list, max_length=6)
+
+
+class AgentAwait(StrictModel):
+    agentIds: Optional[List[Identifier]] = Field(default=None, max_length=8)
 
 
 class ViewerArgs(StrictModel):

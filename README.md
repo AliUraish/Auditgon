@@ -1,6 +1,6 @@
 # Auditgon · Spatial audits
 
-Give Auditgon a 3D scan link and any plans, photographs, or documents you have. It opens the scan in the workspace, uses visual tools to examine it, builds a room model and inspection agenda, and keeps the spatial markers and report linked to the same evidence.
+Give Argon a 3D scan link and a rough sketch of the intended layout. It opens the scan in the workspace, walks it with camera tools, builds the observed room model, verifies every sketched room, connection, and feature against what it sees, and draws its findings in the 3D scan and on the blueprint. Markers, drawings, and the report share the same evidence.
 
 ```text
 Gemini_Argon/
@@ -36,14 +36,16 @@ Open [Auditgon](http://127.0.0.1:8001). Python serves both the built frontend an
 ## Workflow
 
 1. Paste a published SuperSplat scene link or supported streamed asset URL in **Scan & materials**. A compact scan file can also be uploaded.
-2. Add optional blueprints, photographs, PDFs, structured JSON, or text notes. Files are saved sequentially; photographs are resized before uploading.
-3. Choose **Open scan here** to explore, or **Start audit** to run the server-configured Gemini agent. There is no agent-connection step in the product.
-4. Review the generated rooms, checklist, and findings. Each flag retains its reason, evidence, location, and review history.
+2. Add a rough sketch (image or PDF, marked **Sketch / plan**), plus optional photographs, PDFs, structured JSON, or text notes. A sketch is read into rooms, connections, and features at upload when the server key is set; otherwise the agent reads it during the audit. Files are saved sequentially; photographs are resized before uploading.
+3. Choose **Open scan here** to explore, or **Start audit** to run the server-configured Gemini agent. Argon walks the scan with relative camera moves, captures views, samples depth, and builds the observed room model, matching each observed room to a sketched one.
+4. Review the sketch verification table, checklist, and findings. Each sketched claim ends as **as sketched**, **differs**, or blocked with a capture request. Findings carry dimension lines, surface outlines, and boxes on the cited captures, drawn on the live scan, the blueprint, and the floor plan.
 5. Explore **3D blueprint** and export the report, drawing, spatial model, or draft 3D geometry.
 
 A scan-only audit can discover visible spaces and workmanship candidates. Supplied blueprints add independent design intent. Generated geometry is a draft: visual reconstruction and rendered depth alone do not establish surveyed dimensions or statutory compliance. Unsupported numeric or operation checks remain unresolved with specific evidence requests. A draft room layout is not represented as a measured as-built drawing. Repair costs and payment holdbacks require supplied quotes and contract terms.
 
 ## AI runtime
+
+The lead agent runs as synchronous `gemini-4-argon` model turns through the Interactions API (3 to 6 seconds per turn). Tool results are batched per turn and stripped of JSON nulls, which the provider cannot process. Sub-agents deployed by Argon run the same way and report into the dashboard's team panel. Re-audit keeps the previous run as a baseline and reports only the differences.
 
 Set `GEMINI_API_KEY` in the Python server environment and restart it to enable live audits. Credentials stay on the server. The integration uses Google's Managed Agent harness with the `gemini-4-argon` model. Optional `GEMINI_BLUEPRINT_MODEL` selects the extraction model.
 

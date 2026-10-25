@@ -308,10 +308,10 @@ def test_provider_explicit_argon_model_and_saved_tool_resume(settings):
         assert request.headers["x-goog-api-key"] == "private-key"
         body = json.loads(request.content)
         requests.append(body)
-        assert body["agent_config"]["model"] == "gemini-4-argon"
+        assert body["model"] == "gemini-4-argon"
         if len(requests) == 1:
             return httpx.Response(200, json={"id": "turn-1", "status": "requires_action", "environment_id": "env-1", "steps": [{"id": "capture-1", "type": "function_call", "name": "inspect_view", "arguments": {"label": "First real view"}}]})
-        assert body["previous_interaction_id"] == "turn-1" and body["environment"] == "env-1"
+        assert body["previous_interaction_id"] == "turn-1"
         assert body["input"][0]["type"] == "function_result" and body["input"][0]["call_id"] == "capture-1"
         return httpx.Response(200, json={"id": "turn-2", "status": "completed", "output_text": "Metric evidence remains unavailable; request calibration."})
 
@@ -380,7 +380,7 @@ def test_failed_provider_continuation_resumes_without_replaying_a_tool_commit(se
                 await runner.start(state)
             saved = store.load(context.owner)
             assert saved["snapshot"]["status"] == "error"
-            assert saved["provider"]["continuation"]["callId"] == "read-1"
+            assert saved["provider"]["continuation"]["results"][0]["callId"] == "read-1"
             await runner.start(saved)
             assert saved["provider"]["executedCalls"] == ["read-1"]
             assert "continuation" not in saved["provider"]

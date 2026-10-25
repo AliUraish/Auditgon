@@ -1,9 +1,23 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Activity, ArrowUpRight, Check, CheckCheck, Circle, CircleAlert, Code2, Compass, LoaderCircle, MapPin, Ruler, ScanLine, X } from "lucide-react";
 import type { CheckStatus, InspectionEvent, InspectionSnapshot } from "@/lib/contracts";
 import { elapsedLabel, inspectionStats, shortTime } from "@/lib/client";
+
+/** Elapsed seconds that tick locally between server snapshots while the audit is running. */
+export function useLiveElapsed(snapshot: InspectionSnapshot) {
+  const [tick, setTick] = useState(0);
+  const base = useRef({ seconds: snapshot.elapsedSeconds, at: Date.now() });
+  useEffect(() => { base.current = { seconds: snapshot.elapsedSeconds, at: Date.now() }; setTick(0); }, [snapshot.elapsedSeconds, snapshot.status]);
+  useEffect(() => {
+    if (snapshot.status !== "running") return;
+    const timer = window.setInterval(() => setTick(value => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [snapshot.status]);
+  void tick;
+  return snapshot.status === "running" ? base.current.seconds + Math.floor((Date.now() - base.current.at) / 1000) : snapshot.elapsedSeconds;
+}
 
 export const checkLabels: Record<CheckStatus, string> = { pending: "Not inspected", observing: "Inspecting", pass: "Verified", finding: "Flagged", blocked: "Needs evidence" };
 
@@ -26,12 +40,13 @@ export function PanelHeader({ eyebrow, title, action }: { eyebrow?: string; titl
 
 export function Metrics({ snapshot }: { snapshot: InspectionSnapshot }) {
   const stats = inspectionStats(snapshot);
+  const elapsed = useLiveElapsed(snapshot);
   return <div className="metrics-strip">
     <div className="metric coverage-metric"><span className="metric-label">Verified coverage</span><div><strong>{stats.percent}<em>%</em></strong><span className="coverage-track"><span style={{ width: `${stats.percent}%` }} /></span></div><span className="metric-caption">{stats.verified} of {stats.total} checks verified</span></div>
     <div className="metric"><span className="metric-label"><CheckCheck size={13} /> Accounted for</span><strong>{stats.accounted}<em> / {stats.total}</em></strong><span className="metric-caption">Includes blocked checks</span></div>
     <div className="metric"><span className="metric-label"><MapPin size={13} /> Findings</span><strong className={stats.openFindings.length ? "text-rust" : ""}>{stats.openFindings.length.toString().padStart(2, "0")}</strong><span className="metric-caption">Open & awaiting review</span></div>
     <div className="metric"><span className="metric-label"><CircleAlert size={13} /> Needs evidence</span><strong>{stats.blocked.toString().padStart(2, "0")}</strong><span className="metric-caption">Additional capture required</span></div>
-    <div className="metric"><span className="metric-label"><Activity size={13} /> Inspection time</span><strong className="tabular">{elapsedLabel(snapshot.elapsedSeconds)}</strong><span className="metric-caption">{snapshot.corrections} recorded correction{snapshot.corrections === 1 ? "" : "s"}</span></div>
+    <div className="metric"><span className="metric-label"><Activity size={13} /> Inspection time</span><strong className="tabular">{elapsedLabel(elapsed)}</strong><span className="metric-caption">{snapshot.corrections} recorded correction{snapshot.corrections === 1 ? "" : "s"}</span></div>
   </div>;
 }
 

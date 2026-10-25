@@ -16,8 +16,8 @@ from .errors import ApiFailure, error_json, register_errors
 from .gemini import GeminiClient
 from .managed import ManagedRunner
 from .models import Action, AgentToolResult, Blueprint, BlueprintRequest, FindingPatch, ManualFinding, ScenePatch, ProjectReset, safe_asset_url
-from .report import floorplan_svg, report_data, report_html, blueprint_3d_json, blueprint_obj
-from .state import add_manual_finding, advance_demo, event, finalize, import_blueprint, initial_state, sample_state, patch_finding, start_demo, stop_clock, replace_scene
+from .report import floorplan_svg, report_data, report_html, blueprint_3d_json, blueprint_obj, run_diff
+from .state import add_manual_finding, advance_demo, attach_design_reference, event, finalize, import_blueprint, initial_state, sample_state, patch_finding, start_demo, start_reaudit, stop_clock, replace_scene
 from .scenes import resolve_scene, scene_id, supported_scene_filename
 from .store import Store
 from .uploads import evidence_for, save_upload_file
@@ -138,7 +138,9 @@ def create_app(settings: Optional[Settings] = None, transport: Optional[httpx.As
         elif data.action == "advance":
             if state["snapshot"]["mode"] == "managed":
                 async with application.state.heavy_operations:
-                    await managed.advance(state)
+                    changed = await managed.advance(state)
+                if not changed:
+                    return public_snapshot(context, store.load(context.owner))
             else:
                 advance_demo(state)
         elif data.action == "pause" and state["snapshot"]["status"] == "running":
@@ -151,6 +153,12 @@ def create_app(settings: Optional[Settings] = None, transport: Optional[httpx.As
             if state["snapshot"]["mode"] == "managed":
                 await managed.cancel(state)
             finalize(state)
+        elif data.action == "reaudit":
+            if state["snapshot"]["mode"] == "managed":
+                await managed.cancel(state)
+            start_reaudit(state)
+            async with application.state.heavy_operations:
+                await managed.start(state)
         elif data.action == "reset":
             if state["snapshot"]["mode"] == "managed":
                 await managed.cancel(state)
@@ -205,11 +213,15 @@ def create_app(settings: Optional[Settings] = None, transport: Optional[httpx.As
     async def blueprint(request: Request, context: Context = Depends(context_for)):
         data = await read_json(request, BlueprintRequest)
         state = store.load(context.owner)
-        if state["snapshot"]["status"] == "running":
-            raise ApiFailure(409, "Pause the inspection before replacing its independent reference.", "RUN_ACTIVE")
         async with application.state.heavy_operations:
             model = await extract_blueprint(context, application.state.provider, data.uploadId) if data.uploadId else Blueprint.model_validate(data.blueprint)
-        import_blueprint(state, model)
+        state = store.load(context.owner)  # extraction takes seconds; re-read so a running audit's progress is kept
+        if state["snapshot"]["blueprint"].get("generatedFrom") == "scan" and state["snapshot"]["blueprint"]["rooms"]:
+            attach_design_reference(state, model)
+        else:
+            if state["snapshot"]["status"] == "running":
+                raise ApiFailure(409, "Pause the inspection before replacing its independent reference.", "RUN_ACTIVE")
+            import_blueprint(state, model)
         store.save(context.owner, state)
         return public_snapshot(context, state)
 
@@ -274,19 +286,22 @@ def create_app(settings: Optional[Settings] = None, transport: Optional[httpx.As
         state = store.load(context.owner)
         snapshot = public_snapshot(context, state)
         if format == "json":
-            data = report_data(snapshot)
+            data = report_data(snapshot, state.get("designReference"))
             if state.get("designReference"):
                 data["designReference"] = state["designReference"]
             return data
         if format == "blueprint":
             return blueprint_3d_json(snapshot)
+        if format == "diff":
+            runs = state.get("runs", [])
+            return run_diff(snapshot, runs[-1] if runs else None)
         if format == "obj":
             return Response(blueprint_obj(snapshot), media_type="text/plain", headers={"Content-Disposition": "attachment; filename=auditgon-draft-3d.obj"})
         if format == "html":
-            return HTMLResponse(report_html(snapshot, str(request.base_url).rstrip("/")), headers={"Content-Disposition": "inline; filename=auditgon-inspection-r{}.html".format(snapshot["revision"]), "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; frame-ancestors 'self'"})
+            return HTMLResponse(report_html(snapshot, str(request.base_url).rstrip("/"), state.get("designReference")), headers={"Content-Disposition": "inline; filename=auditgon-inspection-r{}.html".format(snapshot["revision"]), "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self'; base-uri 'none'; frame-ancestors 'self'"})
         if format == "svg":
             return Response(floorplan_svg(snapshot, finding), media_type="image/svg+xml", headers={"Content-Disposition": "inline; filename=auditgon-inspection-r{}.svg".format(snapshot["revision"]), "Content-Security-Policy": "default-src 'none'; sandbox"})
-        raise ApiFailure(400, "Choose report format json, html, svg, blueprint, or obj.", "INVALID_FORMAT")
+        raise ApiFailure(400, "Choose report format json, html, svg, blueprint, obj, or diff.", "INVALID_FORMAT")
 
     @application.get("/{file_path:path}")
     async def frontend(file_path: str):

@@ -49,7 +49,7 @@ def initial_state(now: Optional[int] = None) -> State:
     current = now_ms() if now is None else now
     return {"projectVersion": 2, "elapsedMs": 0, "activeSince": None, "snapshot": {
         "id": uid(), "name": "Untitled audit", "address": "Add a scan and any reference materials", "mode": "managed", "status": "ready", "createdAt": iso(current), "updatedAt": iso(current), "startedAt": None, "elapsedSeconds": 0,
-        "currentRoomId": "", "currentItemId": None, "blueprint": empty_blueprint(), "checklist": [], "findings": [], "events": [], "uploads": [], "path": [], "trail": [], "corrections": 0, "revision": 1, "verdict": "Incomplete",
+        "currentRoomId": "", "currentItemId": None, "blueprint": empty_blueprint(), "checklist": [], "findings": [], "events": [], "uploads": [], "path": [], "trail": [], "agents": [], "corrections": 0, "revision": 1, "verdict": "Incomplete",
         "scan": {"sourceUrl": "", "assetUrl": None, "name": "No scan selected", "calibrated": False, "scale": 1, "version": "unconfigured", "configured": False, "posterUrl": None},
         "capabilities": {"managedAgent": False, "uploads": True, "persistence": True, "providerMessage": "Add a scan link and optional materials to begin."},
     }}
@@ -189,6 +189,8 @@ def import_blueprint(state: State, blueprint: Blueprint, now: Optional[int] = No
         carry = {item["id"]: item for item in previous_checks}
     else:
         design, room_map, carry = None, {}, {}
+    if model["generatedFrom"] == "scan" and not carry:
+        carry = {item["id"]: item for item in previous_checks}
     snapshot["scan"]["calibrated"] = False
     snapshot["checklist"] = [{"id": "check-" + feature["id"], "roomId": feature["roomId"], "label": feature["label"], "category": feature["kind"], "status": "pending", "anchor": feature["position"],
                               "expected": "{} {}{}".format(feature["expected"], feature.get("unit", model["units"]), " · " + feature["source"] if feature.get("source") else "")} for feature in model["features"] if feature["kind"] != "furniture" and "expected" in feature]
@@ -199,6 +201,19 @@ def import_blueprint(state: State, blueprint: Blueprint, now: Optional[int] = No
         ])
     if design is not None:
         snapshot["checklist"].extend(sketch_checks(design, model, room_map, carry))
+    if model["generatedFrom"] == "scan":
+        # A model revision keeps every earlier result by ID and keeps discovered checks whose room still exists.
+        present = {item["id"] for item in snapshot["checklist"]}
+        rooms_now = {room["id"] for room in model["rooms"]}
+        for item in snapshot["checklist"]:
+            saved = carry.get(item["id"])
+            if saved:
+                for key in ("status", "observed", "reason", "findingId", "previousStatus", "changed"):
+                    if key in saved:
+                        item[key] = saved[key]
+        for previous in previous_checks:
+            if previous["id"].startswith("discovered-") and previous["id"] not in present and previous["roomId"] in rooms_now:
+                snapshot["checklist"].append(previous)
     snapshot["checklist"] = snapshot["checklist"][:600]
     detail = "{} rooms and {} features from {}.".format(len(model["rooms"]), len(model["features"]), model["generatedFrom"])
     if design is not None and model["generatedFrom"] == "scan":
@@ -206,6 +221,22 @@ def import_blueprint(state: State, blueprint: Blueprint, now: Optional[int] = No
     elif design is not None:
         detail += " Sketch verification checks generated for every drawn room, connection, and feature."
     event(state, "plan", "Sketch reference imported" if model["generatedFrom"] == "materials" else "Spatial model imported", detail + " Previous results were removed. Extracted locations need review; no construction has been verified.", now=now)
+
+
+def attach_design_reference(state: State, blueprint: Blueprint, now: Optional[int] = None) -> None:
+    """A sketch arriving after the observed model exists becomes the design reference without discarding results."""
+    model = blueprint.model_dump(mode="json", exclude_none=True)
+    model.update(generatedFrom="materials", coordinateFrame="reference")
+    model.setdefault("metricStatus", "design-dimensions" if any("expected" in feature for feature in model["features"]) else "unmeasured")
+    state["designReference"] = deepcopy(model)
+    snapshot = state["snapshot"]
+    room_map = {room["designRoomId"]: room["id"] for room in snapshot["blueprint"]["rooms"] if room.get("designRoomId")}
+    carry = {item["id"]: item for item in snapshot["checklist"]}
+    kept = [item for item in snapshot["checklist"] if not item["id"].startswith("sketch-")]
+    snapshot["checklist"] = (kept + sketch_checks(model, snapshot["blueprint"], room_map, carry))[:600]
+    snapshot["verdict"] = verdict(snapshot)
+    state.setdefault("provider", {"appliedIds": [], "executedCalls": [], "pollAfter": 0, "rounds": 0})["notice"] = "The owner attached a sketch during the run: {} new sketch- claims were added to the checklist. Call read_blueprint, revise create_spatial_model with designRoomId on each observed room that matches a sketched room, then record every sketch- claim as pass (as sketched) or finding (differs or missing) with cited captures.".format(len([item for item in snapshot["checklist"] if item["id"].startswith("sketch-")]))
+    event(state, "plan", "Sketch reference attached", "{} sketched rooms and {} features now have verification claims. The observed model and existing findings are kept; Argon matches rooms on its next model revision.".format(len(model["rooms"]), len(model["features"])), now=now)
 
 
 def patch_finding(state: State, finding_id: str, patch: FindingPatch, now: Optional[int] = None) -> None:
@@ -294,6 +325,34 @@ def sketch_checks(design: Dict[str, Any], model: Dict[str, Any], room_map: Dict[
         note = " A written dimension is checked separately and stays blocked without calibration." if "expected" in feature else ""
         items.append(item("sketch-feature-" + feature["id"], feature["roomId"], "{}: present where sketched".format(feature["label"]), "Presence", "Sketched in {}. Confirm the {} exists at the drawn location and mark it in the scan.{}".format(names.get(feature["roomId"], feature["roomId"]), feature["kind"], note), list(feature["position"]) if identity else None))
     return items
+
+
+def start_reaudit(state: State, now: Optional[int] = None) -> Dict[str, Any]:
+    """Freeze the current results as a numbered run, then reopen every check for re-verification in place."""
+    snapshot = state["snapshot"]
+    if not snapshot["blueprint"]["rooms"] and not snapshot["checklist"]:
+        raise ApiFailure(409, "Nothing to re-audit yet. Run the first audit before asking for changes.", "NO_BASELINE")
+    if snapshot["status"] == "running":
+        raise ApiFailure(409, "Pause or finish the current audit before starting a re-audit.", "RUN_ACTIVE")
+    stop_clock(state, now)
+    number = snapshot.get("run", 1)
+    baseline = {"id": uid(), "number": number, "endedAt": iso(now), "startedAt": snapshot.get("startedAt"), "verdict": snapshot["verdict"], "status": snapshot["status"], "elapsedSeconds": snapshot["elapsedSeconds"],
+                "checklist": deepcopy(snapshot["checklist"]), "findings": deepcopy(snapshot["findings"]), "blueprint": deepcopy(snapshot["blueprint"]), "trail": deepcopy(snapshot.get("trail", []))}
+    state["runs"] = (state.get("runs", []) + [baseline])[-5:]
+    snapshot["runHistory"] = (snapshot.get("runHistory", []) + [{"number": number, "endedAt": baseline["endedAt"], "verdict": baseline["verdict"], "checks": len(baseline["checklist"]), "findings": len(baseline["findings"]), "rooms": len(baseline["blueprint"]["rooms"])}])[-5:]
+    snapshot["run"] = number + 1
+    for item in snapshot["checklist"]:
+        item["previousStatus"] = item["status"]
+        item.pop("changed", None)
+        if item["status"] in ("pass", "finding", "blocked", "observing"):
+            item["status"] = "pending"
+    snapshot.update(status="ready", verdict="Incomplete", currentItemId=None, startedAt=None, elapsedSeconds=0)
+    snapshot.pop("agent", None)
+    state.pop("provider", None)
+    state["elapsedMs"] = 0
+    state["activeSince"] = None
+    event(state, "plan", "Re-audit {} started".format(number + 1), "Run {} is kept as the baseline. Every check is re-verified in place; only changes are reported in the diff.".format(number), now=now)
+    return baseline
 
 
 def record_camera(state: State, position) -> None:

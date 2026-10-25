@@ -1,6 +1,7 @@
 """Current Google Interactions REST protocol with bounded streamed responses."""
 from typing import Any, Dict, Optional
 import json
+import logging
 import httpx
 from .errors import ApiFailure
 
@@ -20,13 +21,19 @@ class GeminiClient:
         try:
             async with self.client.stream(method or ("GET" if body is None else "POST"), url,
                                           headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json", "Api-Revision": "2026-05-20"},
-                                          json=body, timeout=httpx.Timeout(45, connect=10)) as response:
+                                          json=body, timeout=httpx.Timeout(150 if body is not None else 45, connect=10)) as response:
                 if response.status_code >= 400:
+                    # Server-side diagnostics only: status and a short body excerpt, never the key or the request.
+                    try:
+                        excerpt = (await response.aread())[:400].decode("utf-8", errors="replace")
+                    except Exception:
+                        excerpt = ""
+                    logging.getLogger("auditgon.provider").warning("Gemini %s %s -> HTTP %s: %s", method or ("GET" if body is None else "POST"), path or "/interactions", response.status_code, excerpt.replace("\n", " "))
                     message = "The Gemini key does not have access to this agent or model. Verify gemini-4-argon access in Google AI Studio." if response.status_code in (401, 403) else "Gemini quota or rate limit reached. Wait before resuming the saved inspection." if response.status_code == 429 else "Gemini rejected the request. Check access to the current Interactions API and gemini-4-argon." if response.status_code == 400 else "Gemini could not finish this request. The saved checkpoint is preserved."
                     raise ApiFailure(429 if response.status_code == 429 else 502, message, "PROVIDER_" + str(response.status_code))
                 contents = bytearray()
                 async for chunk in response.aiter_bytes():
-                    if len(contents) + len(chunk) > 1024 * 1024:
+                    if len(contents) + len(chunk) > 24 * 1024 * 1024:  # stored turns echo the images we sent
                         raise ApiFailure(502, "The Gemini response exceeded the bounded checkpoint limit.", "PROVIDER_RESPONSE_LIMIT")
                     contents.extend(chunk)
         except httpx.HTTPError:
@@ -35,8 +42,10 @@ class GeminiClient:
             data = json.loads(contents)
         except (ValueError, UnicodeDecodeError):
             raise ApiFailure(502, "Gemini returned invalid JSON.", "PROVIDER_INVALID_RESPONSE") from None
-        if not isinstance(data, dict) or not isinstance(data.get("id"), str) or not isinstance(data.get("status"), str):
+        if not isinstance(data, dict) or not isinstance(data.get("status"), str):
             raise ApiFailure(502, "Gemini did not return an interaction checkpoint.", "PROVIDER_INVALID_RESPONSE")
+        if not isinstance(data.get("id"), str):
+            data["id"] = "unstored-" + str(abs(hash(json.dumps(body, sort_keys=True, default=str)[:2000])))  # store=false responses carry no id
         return data
 
 

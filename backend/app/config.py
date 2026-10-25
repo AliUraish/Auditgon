@@ -4,6 +4,25 @@ from pathlib import Path
 import os
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_env_file(path: Path) -> None:
+    """Read KEY=VALUE lines from a private .env file into the process environment without overriding real variables."""
+    try:
+        lines = path.read_text().splitlines()
+    except OSError:
+        return
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_env_file(Path(os.environ.get("ARGON_ENV_FILE", str(BACKEND_ROOT / ".env"))))
 RESOURCE_LIMITS = {
     "maxUploadBytes": 32 * 1024 * 1024,
     "maxBlueprintBytes": 10 * 1024 * 1024,

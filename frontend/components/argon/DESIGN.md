@@ -32,3 +32,11 @@ The user selected the blue architectural cutaway at https://view.promediaproduct
 The dashboard chrome now uses a pure neutral scale: near-black surfaces, white ink, and grays mapped from the previous palette by perceived luminance. No lime, olive, rust, or amber remains in the dashboard. Status and severity are told apart by tone and treatment rather than hue: verified is a solid light pill with dark text, critical is solid white, major is solid mid-gray, and minor or blocked is outlined. The navy 3D blueprint cutaway, the splat viewer's own rendering, and the printable report keep their existing palettes.
 
 The heatmap feature was removed to narrow the product. The reference map, 3D blueprint, and report no longer offer a coverage tint; coverage is read from the checklist, room progress rows, and finding markers.
+
+## Sketch verification and drawing
+
+The product narrowed to one use case: verify a rough sketch against a 3D scan. The inputs page treats images named like sketches or plans as **Sketch / plan** and reads them at upload. The report gains a sketch verification table. Findings can now be drawn: a canvas overlay on the live splat viewer projects saved scene points each frame into dimension lines, surface outlines, and the agent's walking trail; the blueprint renders the same shapes as amber line and translucent meshes, the floor plan as SVG, and evidence thumbnails show the agent's image boxes. Camera moves no longer reload the scan: a reusable pose slot after the finding annotations drives the viewer's own camera transition.
+
+## Live run revision (2026-10-25, evening)
+
+Two viewers now sit side by side in the workspace: the AI viewer follows Argon, serves its camera, capture, and depth tools, and carries a live HUD with the current action and the latest capture of this run; the Human viewer is free to roam and place markers. Re-audit keeps earlier runs as baselines and shows a GitHub-style diff. Argon deploys sub-agents (finish surveyor, sketch verifier, measurer, room inspector) that work on saved captures; the team panel lists them with status and reports. The lead loop runs as synchronous Gemini model turns because the managed-agent harness dropped image turns; tool results are sent null-free and batched per turn.

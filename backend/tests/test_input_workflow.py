@@ -16,7 +16,7 @@ from backend.app.main import create_app
 from backend.app.managed import ManagedRunner, provider_state
 from backend.app.materials import read_materials
 from backend.app.models import Blueprint, MaterialRead, ManualFinding, safe_asset_url
-from backend.app.report import blueprint_3d_json, blueprint_obj, floorplan_svg, report_data
+from backend.app.report import blueprint_3d_json, blueprint_obj, floorplan_svg, report_data, report_html
 from backend.app.scenes import parse_bootstrap, resolve_scene, verify_public_host
 from backend.app.state import SAMPLE, add_manual_finding, finalize, import_blueprint, initial_state, sample_state, now_ms, verdict
 from backend.app.store import Store
@@ -209,7 +209,7 @@ def test_managed_discovery_starts_with_only_scan_and_no_blueprint(tmp_path):
             return httpx.Response(200, text=bootstrap_html([1, 2, 3], [0, 1, 0]), headers={"content-type": "text/html"})
         body = json.loads(request.content)
         calls.append(body)
-        assert body["agent_config"]["model"] == "gemini-4-argon"
+        assert body["model"] == "gemini-4-argon"
         assert {tool.get("name") for tool in body["tools"]} >= {"read_materials", "create_spatial_model", "inspect_view"}
         return httpx.Response(200, json={"id": "discovery-1", "status": "requires_action", "environment_id": "env-1", "steps": [{"id": "view-1", "type": "function_call", "name": "inspect_view", "arguments": {"label": "Discover the first room"}}]})
     with TestClient(create_app(settings_for(tmp_path, "key"), transport=httpx.MockTransport(handler)), base_url="http://127.0.0.1", client=("127.0.0.1", 1)) as client:
@@ -276,3 +276,109 @@ def test_viewer_rejects_unsupported_direct_and_uploaded_scan_formats(tmp_path):
         selected = client.patch("/api/scene", json={"assetUrl": uploaded.json()["url"]})
         assert selected.status_code == 415 and selected.json()["code"] == "UNSUPPORTED_SCENE_FORMAT"
         assert not client.get("/api/inspection").json()["scan"]["configured"]
+
+
+def sketch_model():
+    model = deepcopy(SAMPLE["blueprint"])
+    model.update(id="owner-sketch", name="Owner sketch", isSample=False, generatedFrom="materials", coordinateFrame="reference", metricStatus="unmeasured", units="scene")
+    for feature in model["features"]:
+        feature.pop("expected", None)
+        feature.pop("unit", None)
+    return model
+
+
+def test_sketch_import_generates_room_connection_and_feature_claims(tmp_path):
+    settings = settings_for(tmp_path)
+    store = Store(settings)
+    state = store.load("owner")
+    import_blueprint(state, Blueprint.model_validate(sketch_model()))
+    checklist = state["snapshot"]["checklist"]
+    rooms = [item for item in checklist if item["id"].startswith("sketch-room-")]
+    links = [item for item in checklist if item["id"].startswith("sketch-link-")]
+    features = [item for item in checklist if item["id"].startswith("sketch-feature-")]
+    assert len(rooms) == 6 and all(item["category"] == "Layout" for item in rooms)
+    assert links and len({item["id"] for item in links}) == len(links)
+    assert features and all(item["category"] == "Presence" for item in features)
+    assert not any(item["id"].startswith("check-") for item in checklist), "no written dimensions means no metric checks"
+    assert state["designReference"]["id"] == "owner-sketch"
+    assert all(item["roomId"] in {room["id"] for room in sketch_model()["rooms"]} for item in rooms)
+
+
+def test_scan_model_matches_sketch_rooms_and_carries_sketch_results(tmp_path):
+    settings = settings_for(tmp_path)
+    store = Store(settings)
+    context = Context("owner", store, settings)
+    state = store.load(context.owner)
+    import_blueprint(state, Blueprint.model_validate(sketch_model()))
+    capture = save_bytes(context, "reference", "scan-capture-1.png", "image/png", PNG)
+    state["snapshot"]["uploads"] = [capture]
+    provider_state(state)["geometrySamples"] = [[-8, 0, -6], [0, 0, -6], [0, 0, 0], [1, 1, 1], [2, 1, 1], [2, 1, 2]]
+
+    async def scenario():
+        async with httpx.AsyncClient() as http:
+            runner = ManagedRunner(context, GeminiClient("", http))
+            early = runner.commit_result(state, {"itemId": "sketch-room-living", "status": "pass", "basis": "layout", "observed": "Living room visible with glazing as sketched", "reason": "Seen in capture", "evidenceIds": [capture["id"]]})
+            assert early["status"] == "pass"
+            observed = draft_model("scan")
+            observed["rooms"] = [{**room, "id": "obs-" + room["id"], "adjacentRoomIds": ["obs-" + other for other in room["adjacentRoomIds"]], "designRoomId": room["id"]} for room in observed["rooms"][:4]]
+            kept = {room["id"] for room in observed["rooms"]}
+            for room in observed["rooms"]:
+                room["adjacentRoomIds"] = [other for other in room["adjacentRoomIds"] if other in kept]
+            observed["features"] = [{**feature, "id": "obs-" + feature["id"], "roomId": "obs-" + feature["roomId"]} for feature in observed["features"] if "obs-" + feature["roomId"] in kept]
+            bad = deepcopy(observed)
+            bad["rooms"][0]["designRoomId"] = "not-a-sketch-room"
+            assert "error" in runner.create_spatial_model(state, {"blueprint": bad, "evidenceIds": [capture["id"]], "reason": "bad mapping"})
+            result = runner.create_spatial_model(state, {"blueprint": observed, "evidenceIds": [capture["id"]], "reason": "Observed rooms from captures and depth"})
+            assert result["saved"] and sorted(result["unmatchedSketchRooms"]) == sorted(room["name"] for room in sketch_model()["rooms"][4:])
+            checklist = {item["id"]: item for item in state["snapshot"]["checklist"]}
+            assert checklist["sketch-room-living"]["status"] == "pass" and checklist["sketch-room-living"]["roomId"] == "obs-living"
+            unmatched = [item for item in checklist.values() if item["id"].startswith("sketch-room-") and item["roomId"] == "unassigned"]
+            assert len(unmatched) == 2
+            missing = runner.commit_result(state, {"itemId": unmatched[0]["id"], "status": "finding", "basis": "layout", "observed": "No such room is reachable from the hall", "reason": "Walked the hall; no opening where the sketch draws it", "evidenceIds": [capture["id"]], "finding": {"title": "Sketched room not found", "severity": "major", "expected": "Room as sketched", "nextAction": "Confirm with the owner whether the sketch is current"}})
+            assert missing["status"] == "finding"
+            finding = state["snapshot"]["findings"][-1]
+            assert finding["category"] == "Sketch deviation" and finding["annotationSource"] == "reference"
+            feature_check = "sketch-feature-" + sketch_model()["features"][0]["id"]
+            drawn = runner.commit_result(state, {"itemId": feature_check, "status": "finding", "basis": "layout", "observed": "Opening is further along the wall", "reason": "Capture shows the opening offset", "evidenceIds": [capture["id"]], "finding": {"title": "Opening offset from sketch", "severity": "minor", "expected": "Opening as drawn", "nextAction": "Owner to confirm", "anchor": [1, 1, 1], "endAnchor": [2, 1, 1], "region": [[1, 1, 1], [2, 1, 1], [2, 1, 2]], "imageRegions": [{"evidenceId": capture["id"], "box": [0.1, 0.1, 0.5, 0.6]}, {"evidenceId": "someone-else", "box": [0, 0, 1, 1]}]}})
+            assert sorted(drawn["drawn"]) == ["endAnchor", "imageRegions", "measurement", "region"]
+            assert state["snapshot"]["findings"][-1]["measurement"]["units"] == "scene" and state["snapshot"]["findings"][-1]["measurement"]["value"] == 1.0
+            finding = state["snapshot"]["findings"][-1]
+            assert finding["endAnchor"] == [2, 1, 1] and len(finding["region"]) == 3 and len(finding["imageRegions"]) == 1
+            assert "uncited" in finding["reason"]
+            unsampled = runner.commit_result(state, {"itemId": feature_check, "status": "finding", "basis": "layout", "observed": "Opening is further along the wall", "reason": "Second look", "evidenceIds": [capture["id"]], "finding": {"title": "Opening offset from sketch", "severity": "minor", "expected": "Opening as drawn", "nextAction": "Owner to confirm", "anchor": [1, 1, 1], "endAnchor": [9, 9, 9]}})
+            assert unsampled["drawn"] == [] and "endAnchor" not in state["snapshot"]["findings"][-1]
+            report = report_data(state["snapshot"], state["designReference"])
+            verification = report["sketchVerification"]
+            assert verification["summary"]["claims"] == len([item for item in checklist.values() if item["id"].startswith("sketch-")])
+            assert next(room for room in verification["rooms"] if room["id"] == "living")["status"] == "as sketched"
+            assert any(room["status"] == "differs" for room in verification["rooms"])
+            assert "Sketch verification" in report_html(state["snapshot"], "https://argon.example", state["designReference"])
+    asyncio.run(scenario())
+
+
+def test_relative_camera_move_and_trail(tmp_path):
+    calls = []
+    def handler(request):
+        if request.method == "GET" and request.url.host == "superspl.at":
+            return httpx.Response(200, text=bootstrap_html([1, 2, 3], [0, 1, 0]), headers={"content-type": "text/html"})
+        body = json.loads(request.content)
+        calls.append(body)
+        if len(calls) == 1:
+            return httpx.Response(200, json={"id": "walk-1", "status": "requires_action", "environment_id": "env-1", "steps": [{"id": "move-1", "type": "function_call", "name": "move_camera", "arguments": {"turn": 45, "forward": 1.5, "label": "Look toward the kitchen"}}]})
+        if len(calls) == 2:
+            assert body["input"][0]["call_id"] == "move-1" and body["input"][0]["result"]["cameraPosition"] == [1.5, 1.6, 0.2]
+            return httpx.Response(200, json={"id": "walk-2", "status": "requires_action", "steps": [{"id": "move-2", "type": "function_call", "name": "move_camera", "arguments": {"label": "no movement"}}, {"id": "read-2", "type": "function_call", "name": "read_blueprint", "arguments": {}}]})
+        assert [item["call_id"] for item in body["input"]] == ["move-2", "read-2"], "every pending call of a turn is answered in one continuation"
+        assert "error" in body["input"][0]["result"] and "blueprint" in body["input"][1]["result"]
+        return httpx.Response(200, json={"id": "walk-3", "status": "completed", "output_text": "Stopped after the invalid move."})
+    with TestClient(create_app(settings_for(tmp_path, "key"), transport=httpx.MockTransport(handler)), base_url="http://127.0.0.1", client=("127.0.0.1", 1)) as client:
+        assert client.patch("/api/scene", json={"sourceUrl": SCENE_URL}).status_code == 200
+        started = client.post("/api/inspection", json={"action": "start", "mode": "managed"}).json()
+        pending = started["agent"]["pendingTool"]
+        assert pending["name"] == "move_camera" and pending["args"]["turn"] == 45 and pending["args"]["forward"] == 1.5
+        answered = client.post("/api/agent-tools/" + pending["id"], json={"cameraPosition": [1.5, 1.6, 0.2], "cameraTarget": [3, 1.6, 2]})
+        assert answered.status_code == 200
+        snapshot = client.get("/api/inspection").json()
+        assert snapshot["trail"] == [[1.5, 1.6, 0.2]]
+        assert snapshot["status"] == "incomplete" and snapshot["agent"].get("pendingTool") is None
+    assert len(calls) == 3

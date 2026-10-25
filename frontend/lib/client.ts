@@ -19,7 +19,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return result as T;
 }
 
-export function runAction(action: "start" | "pause" | "resume" | "reset" | "advance" | "finalize", mode?: "demo" | "managed") {
+export function runAction(action: "start" | "pause" | "resume" | "reset" | "advance" | "finalize" | "reaudit", mode?: "demo" | "managed") {
   return request<InspectionSnapshot>("/api/inspection", { method: "POST", body: JSON.stringify({ action, mode }) });
 }
 

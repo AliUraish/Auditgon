@@ -1,6 +1,6 @@
 import type { BlueprintFeature, InspectionSnapshot, Vec3 } from './contracts';
 
-type Batch = { positions: number[]; normals: number[]; indices: number[] };
+type Batch = { positions: number[]; normals: number[]; indices: number[]; uvs?: number[]; finish?: string; tint?: string };
 export interface BlueprintGeometry {
   batches: Map<string, Batch>; edges: number[]; grid: number[];
   center: Vec3; extent: number; height: number;
@@ -42,6 +42,8 @@ export function buildBlueprintGeometry(snapshot: InspectionSnapshot, selectedRoo
   const center: Vec3 = [(minX + maxX) / 2, floor + height * 0.25, (minZ + maxZ) / 2];
   const batches = new Map<string, Batch>(), edges: number[] = [], grid: number[] = [];
   const batch = (color: string) => { if (!batches.has(color)) batches.set(color, { positions: [], normals: [], indices: [] }); return batches.get(color)!; };
+  // Floors carry the finish Argon observed so the renderer can texture them; the key keeps one batch per finish and tint.
+  const floorBatch = (room: { floorFinish?: string; floorColor?: string }, fallback: string) => { const key = room.floorFinish ? `floor:${room.floorFinish}:${room.floorColor || ''}:${fallback}` : fallback; if (!batches.has(key)) batches.set(key, { positions: [], normals: [], indices: [], uvs: [], finish: room.floorFinish, tint: room.floorColor }); return batches.get(key)!; };
   const line = (a: Vec3, b: Vec3, into = edges) => into.push(...a, ...b);
   const box = (position: Vec3, dimensions: Vec3, color: string, yaw = 0, outline = true) => {
     if (dimensions.some(d => !Number.isFinite(d) || d <= 0)) return;
@@ -63,8 +65,8 @@ export function buildBlueprintGeometry(snapshot: InspectionSnapshot, selectedRoo
   for (const room of rooms) {
     const f = room.floorElevation || 0;
     const color = selectedRoomId === room.id ? '#20578a' : colors.floor;
-    const out = batch(color), base = out.positions.length / 3;
-    room.polygon.forEach(([x,z]) => { out.positions.push(x,f,z); out.normals.push(0,1,0); });
+    const out = floorBatch(room, color), base = out.positions.length / 3;
+    room.polygon.forEach(([x,z]) => { out.positions.push(x,f,z); out.normals.push(0,1,0); out.uvs?.push((x - minX) / extent * 10, (z - minZ) / extent * 10); });
     out.indices.push(...triangulate(room.polygon).map(i => i+base));
     room.polygon.forEach((a,i) => {
       const b = room.polygon[(i+1)%room.polygon.length];

@@ -20,7 +20,8 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
   const [visible, setVisible] = useState(!document.hidden);
   const hasRooms = snapshot.blueprint.rooms.length > 0;
   const geometryKey = JSON.stringify({ model: snapshot.blueprint, selectedRoomId, findings: snapshot.findings.map(f => [f.id,f.status,f.roomId]) });
-  const annotationKey = JSON.stringify({ findings: snapshot.findings.map(f => [f.id,f.anchor,f.status]), path: showPath ? snapshot.path : [], showMarkers });
+  const scanFrame = snapshot.blueprint.coordinateFrame === 'scan';
+  const annotationKey = JSON.stringify({ findings: snapshot.findings.map(f => [f.id,f.anchor,f.status,f.endAnchor,f.region]), path: showPath ? snapshot.path : [], trail: showPath && scanFrame ? snapshot.trail : [], showMarkers });
 
   useEffect(() => {
     const visibility = () => setVisible(!document.hidden);
@@ -46,8 +47,8 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
     setReady(false); setError(null);
     void (async () => {
       try {
-        const { AppBase, AppOptions, CameraComponentSystem, RenderComponentSystem, LightComponentSystem, createGraphicsDevice, DEVICETYPE_WEBGL2, Entity, Color, PROJECTION_ORTHOGRAPHIC, StandardMaterial, CULLFACE_NONE, BLEND_NORMAL, Mesh, MeshInstance, PRIMITIVE_TRIANGLES, PRIMITIVE_LINES, Vec3, RESOLUTION_FIXED } = await import('playcanvas');
-        const pc = { AppBase, AppOptions, CameraComponentSystem, RenderComponentSystem, LightComponentSystem, createGraphicsDevice, DEVICETYPE_WEBGL2, Entity, Color, PROJECTION_ORTHOGRAPHIC, StandardMaterial, CULLFACE_NONE, BLEND_NORMAL, Mesh, MeshInstance, PRIMITIVE_TRIANGLES, PRIMITIVE_LINES, Vec3, RESOLUTION_FIXED };
+        const { AppBase, AppOptions, CameraComponentSystem, RenderComponentSystem, LightComponentSystem, createGraphicsDevice, DEVICETYPE_WEBGL2, Entity, Color, PROJECTION_ORTHOGRAPHIC, StandardMaterial, CULLFACE_NONE, BLEND_NORMAL, Mesh, MeshInstance, PRIMITIVE_TRIANGLES, PRIMITIVE_LINES, Vec3, RESOLUTION_FIXED, Texture, ADDRESS_REPEAT, FILTER_LINEAR_MIPMAP_LINEAR, FILTER_LINEAR, PIXELFORMAT_RGBA8 } = await import('playcanvas');
+        const pc = { AppBase, AppOptions, CameraComponentSystem, RenderComponentSystem, LightComponentSystem, createGraphicsDevice, DEVICETYPE_WEBGL2, Entity, Color, PROJECTION_ORTHOGRAPHIC, StandardMaterial, CULLFACE_NONE, BLEND_NORMAL, Mesh, MeshInstance, PRIMITIVE_TRIANGLES, PRIMITIVE_LINES, Vec3, RESOLUTION_FIXED, Texture, ADDRESS_REPEAT, FILTER_LINEAR_MIPMAP_LINEAR, FILTER_LINEAR, PIXELFORMAT_RGBA8 };
         if (cancelled) return;
         const data = buildBlueprintGeometry(snapshot, selectedRoomId);
         const canvas = document.createElement('canvas');
@@ -81,18 +82,42 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
           if (opacity < 1) { mat.blendType = pc.BLEND_NORMAL; mat.depthWrite = false; }
           mat.update(); resources.push(mat); return mat;
         };
-        const addMesh = (positions: number[], indices: number[] | null, normals: number[] | null, mat: ReturnType<typeof material>, primitive: number = pc.PRIMITIVE_TRIANGLES) => {
+        // Procedural finish textures, drawn once per finish and tint from what Argon observed; never photographic.
+        const finishTexture = (finish: string, tint?: string) => {
+          const size = 256, canvas = document.createElement('canvas'); canvas.width = canvas.height = size;
+          const g = canvas.getContext('2d')!;
+          const base = tint || ({ wood: '#9a6b42', tile: '#c9c2b4', carpet: '#7d7466', concrete: '#8c8f90', stone: '#8d857a', paint: '#d9d6cf', plaster: '#d3cec2', brick: '#9a4e3a', glass: '#9ec7dc', other: '#8a8f94' } as Record<string, string>)[finish] || '#8a8f94';
+          g.fillStyle = base; g.fillRect(0, 0, size, size);
+          const shade = (alpha: number, dark = true) => `rgba(${dark ? '0,0,0' : '255,255,255'},${alpha})`;
+          const rand = (seed: number) => { let s = seed; return () => { s = (s * 9301 + 49297) % 233280; return s / 233280; }; };
+          const r = rand(7);
+          if (finish === 'wood') { for (let y = 0; y < size; y += 32) { g.fillStyle = shade(0.18 + r() * 0.1); g.fillRect(0, y, size, 2); const offset = (y / 32) % 2 ? 90 : 0; g.fillRect((offset + 120) % size, y, 2, 32); for (let k = 0; k < 6; k++) { g.fillStyle = shade(0.05 + r() * 0.07); g.fillRect(0, y + 4 + k * 4.5, size, 1); } } }
+          else if (finish === 'tile') { for (let y = 0; y <= size; y += 64) { g.fillStyle = shade(0.35); g.fillRect(0, y - 1, size, 3); g.fillRect(y - 1, 0, 3, size); } for (let i = 0; i < 300; i++) { g.fillStyle = shade(0.04, r() > 0.5); g.fillRect(r() * size, r() * size, 3, 3); } }
+          else if (finish === 'brick') { for (let y = 0; y < size; y += 32) { g.fillStyle = shade(0.35); g.fillRect(0, y, size, 3); const offset = (y / 32) % 2 ? 48 : 0; for (let x = offset; x < size + 96; x += 96) g.fillRect(x - 2, y, 4, 32); } }
+          else if (finish === 'stone') { for (let i = 0; i < 40; i++) { const w = 40 + r() * 60, h = 30 + r() * 40, x = r() * size, y = r() * size; g.fillStyle = shade(0.08 + r() * 0.12, r() > 0.6); g.fillRect(x, y, w, h); g.strokeStyle = shade(0.3); g.lineWidth = 2; g.strokeRect(x, y, w, h); } }
+          else if (finish === 'glass') { for (let y = 0; y <= size; y += 128) { g.fillStyle = shade(0.4, true); g.fillRect(0, y - 2, size, 4); g.fillRect(y - 2, 0, 4, size); } for (let i = 0; i < 8; i++) { g.fillStyle = shade(0.12, false); g.fillRect(i * 32, 0, 6, size); } }
+          else { for (let i = 0; i < 2600; i++) { g.fillStyle = shade(finish === 'carpet' ? 0.12 : 0.06, r() > 0.5); g.fillRect(r() * size, r() * size, finish === 'carpet' ? 2 : 1.5, finish === 'carpet' ? 2 : 1.5); } }
+          const texture = new pc.Texture(ownApp.graphicsDevice, { width: size, height: size, format: pc.PIXELFORMAT_RGBA8, mipmaps: true, addressU: pc.ADDRESS_REPEAT, addressV: pc.ADDRESS_REPEAT, minFilter: pc.FILTER_LINEAR_MIPMAP_LINEAR, magFilter: pc.FILTER_LINEAR });
+          texture.setSource(canvas); resources.push(texture); return texture;
+        };
+        const addMesh = (positions: number[], indices: number[] | null, normals: number[] | null, mat: ReturnType<typeof material>, primitive: number = pc.PRIMITIVE_TRIANGLES, uvs?: number[]) => {
           if (!positions.length) return;
           const mesh = new pc.Mesh(ownApp.graphicsDevice);
           mesh.setPositions(positions);
           if (indices) mesh.setIndices(indices);
           if (normals) mesh.setNormals(normals);
+          if (uvs && uvs.length) mesh.setUvs(0, uvs);
           mesh.update(primitive);
           const node = new pc.Entity('Blueprint geometry');
           node.addComponent('render', { meshInstances: [new pc.MeshInstance(mesh,mat,node)] });
           ownApp.root.addChild(node); resources.push(mesh);
         };
-        for (const [color,batch] of data.batches) addMesh(batch.positions,batch.indices,batch.normals,material(color));
+        for (const [key,batch] of data.batches) {
+          if (batch.finish) {
+            const mat = material('#d8dde3'); mat.diffuseMap = finishTexture(batch.finish, batch.tint); mat.update();
+            addMesh(batch.positions,batch.indices,batch.normals,mat,pc.PRIMITIVE_TRIANGLES,batch.uvs);
+          } else addMesh(batch.positions,batch.indices,batch.normals,material(key));
+        }
         addMesh(data.grid,null,null,material('#3c719f',true,0.34),pc.PRIMITIVE_LINES);
         addMesh(data.edges,null,null,material('#f0f8ff',true),pc.PRIMITIVE_LINES);
         if (showPath && snapshot.path.length > 1) {
@@ -100,9 +125,30 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
           snapshot.path.slice(-400).forEach((p,i,all)=>{if(i)path.push(...all[i-1],...p);});
           addMesh(path,null,null,material('#d0e99a',true),pc.PRIMITIVE_LINES);
         }
+        // Argon's drawn findings: dimension lines and surface outlines, only in a matching coordinate frame.
+        const drawn = showMarkers ? snapshot.findings.filter(f => f.status !== 'dismissed' && (f.endAnchor || f.region) && (f.annotationSource !== 'scan' || scanFrame)) : [];
+        const outline:number[]=[], fillPositions:number[]=[], fillNormals:number[]=[], fillIndices:number[]=[];
+        for (const f of drawn) {
+          if (f.endAnchor) outline.push(...f.anchor, ...f.endAnchor);
+          if (f.region) {
+            f.region.forEach((p,i)=>outline.push(...p, ...f.region![(i+1)%f.region!.length]));
+            const base = fillPositions.length/3;
+            f.region.forEach(p=>{fillPositions.push(...p);fillNormals.push(0,1,0);});
+            for (let i=1;i+1<f.region.length;i++) fillIndices.push(base,base+i,base+i+1);
+          }
+        }
+        addMesh(outline,null,null,material('#f0c27a',true),pc.PRIMITIVE_LINES);
+        addMesh(fillPositions,fillIndices,fillNormals,material('#f0c27a',true,0.28));
+        const trail = showPath && scanFrame ? (snapshot.trail || []).slice(-200) : [];
+        if (trail.length > 1) {
+          const walk:number[]=[];
+          trail.forEach((p,i,all)=>{if(i)walk.push(...all[i-1],...p);});
+          addMesh(walk,null,null,material('#9ad0ff',true),pc.PRIMITIVE_LINES);
+        }
         const markers = [
           ...snapshot.blueprint.rooms.map(room => ({ id: 'room-' + room.id, position: [room.center[0],(room.floorElevation||0)+0.025,room.center[2]] as Vec3 })),
           ...snapshot.findings.filter(f => f.status !== 'dismissed').map(f => ({ id: 'finding-' + f.id, position: f.anchor })),
+          ...snapshot.findings.filter(f => f.status !== 'dismissed' && f.endAnchor && f.measurement && (f.annotationSource !== 'scan' || scanFrame)).map(f => ({ id: 'measure-' + f.id, position: [(f.anchor[0]+f.endAnchor![0])/2,(f.anchor[1]+f.endAnchor![1])/2,(f.anchor[2]+f.endAnchor![2])/2] as Vec3 })),
         ];
         const update = () => {
           if (cancelled || !camera.camera || !element.clientWidth) return;
@@ -167,7 +213,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
   return <div className="blueprint-renderer" ref={host} tabIndex={0} role="region" aria-label="Interactive blue and white 3D cutaway blueprint. Drag to orbit, scroll to zoom, Shift-drag to pan, or use arrow keys.">
     {!ready && !error && <div className="blueprint-renderer-status"><LoaderCircle size={17} className="as-spin"/>Building the 3D blueprint…</div>}
     {error && <div className="blueprint-renderer-status" role="alert">{error}</div>}
-    {ready && <div className="blueprint-labels">{snapshot.blueprint.rooms.map(room=><div key={room.id} className="blueprint-room-label" ref={node=>{if(node)labels.current.set('room-'+room.id,node);else labels.current.delete('room-'+room.id);}}>{room.name}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed').map((finding,index)=><button type="button" key={finding.id} className={'blueprint-finding-pin severity-'+finding.severity+(selectedFindingId===finding.id?' selected':'')} ref={node=>{if(node)labels.current.set('finding-'+finding.id,node);else labels.current.delete('finding-'+finding.id);}} aria-label={finding.title} title={finding.title} onClick={()=>onSelectFinding(finding.id)}>{index+1}</button>)}</div>}
+    {ready && <div className="blueprint-labels">{snapshot.blueprint.rooms.map(room=><div key={room.id} className="blueprint-room-label" ref={node=>{if(node)labels.current.set('room-'+room.id,node);else labels.current.delete('room-'+room.id);}}>{room.name}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed'&&f.endAnchor&&f.measurement).map(finding=><div key={'measure-'+finding.id} className="blueprint-measure-label" ref={node=>{if(node)labels.current.set('measure-'+finding.id,node);else labels.current.delete('measure-'+finding.id);}}>≈ {finding.measurement!.value} {finding.measurement!.units === 'm' ? 'm' : 'su'}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed').map((finding,index)=><button type="button" key={finding.id} className={'blueprint-finding-pin severity-'+finding.severity+(selectedFindingId===finding.id?' selected':'')} ref={node=>{if(node)labels.current.set('finding-'+finding.id,node);else labels.current.delete('finding-'+finding.id);}} aria-label={finding.title} title={finding.title} onClick={()=>onSelectFinding(finding.id)}>{index+1}</button>)}</div>}
     <button type="button" className="blueprint-reset" aria-label="Reset 3D blueprint camera" onClick={()=>runtime.current?.reset()}><RotateCcw size={13}/></button>
   </div>;
 }

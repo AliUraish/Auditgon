@@ -836,3 +836,42 @@ h1 { color:#efefef; }.page-heading p { color:#a3a3a3; }
 @media(max-width:520px) { .brand>span { display:block;font-size:29px; }.breadcrumb-project { max-width:155px; }.page-heading h1 { font-size:25px; }.audit-inputs-layout .scan-input-section { padding:23px 20px; }.input-intro h2 { font-size:33px; }.input-intro .eyebrow { font-size:8px; }.input-intro p { font-size:11px; }.input-hero-icon { width:44px;height:46px;margin-bottom:22px; }.audit-source-form>label { font-size:11px; }.scan-url-field input { font-size:11px; }.audit-input-actions { gap:8px; }.audit-input-actions .button { font-size:10px;padding:11px; }.audit-inputs-layout .upload-zone strong { font-size:11px; }.audit-inputs-layout .upload-zone>small { font-size:7px; }.queued-materials>div { gap:7px; }.queued-materials strong { font-size:10px; }.queued-materials span { font-size:8px; }.queued-materials select { font-size:8px;max-width:80px; }.blueprint-3d-stage { height:400px; }.plan-generation-empty { min-height:220px; }.blueprint-view-controls { padding:12px; }.blueprint-view-controls>span { font-size:8px; }.blueprint-room-facts strong { font-size:14px; } }
 
 .draft-model-exports { display:flex;flex-direction:column;align-items:flex-start;gap:14px;margin-top:20px; }.draft-model-exports .text-button { color:#d3d3d3;font-size:10px; }
+
+/* Drawn evidence regions and sketch verification. */
+.evidence-image-link { position: relative; display: block; }
+.evidence-box { position: absolute; border: 2px solid #ffffff; box-shadow: 0 0 0 1px #000000, inset 0 0 0 1px #000000; pointer-events: none; border-radius: 2px; }
+.report-section .inspection-table td .text-button { margin-left: 8px; font-size: 9px; }
+
+/* Run diff. */
+.reaudit-button { margin-right: 8px; }
+.viewer-heading > button.reaudit-button { display: inline-flex; }
+.diff-panel { padding: 0 22px 18px; margin-bottom: 22px; }
+.diff-summary { display: flex; flex-wrap: wrap; gap: 16px; font: 9px var(--font-mono); color: #a5a5a5; margin: 2px 0 12px; }
+.diff-summary span { display: inline-flex; align-items: center; gap: 5px; }
+.diff-rows { display: flex; flex-direction: column; border: 1px solid #333333; border-radius: 6px; overflow: hidden; }
+.diff-row { display: grid; grid-template-columns: 22px 1fr auto auto; align-items: center; gap: 12px; padding: 9px 12px; border-bottom: 1px solid #2a2a2a; font-size: 11px; }
+.diff-row:last-child { border-bottom: 0; }
+.diff-row strong { display: block; font-weight: 500; color: #e0e0e0; }
+.diff-row small { color: #8f8f8f; font-size: 9px; }
+.diff-sign { font: 600 13px var(--font-mono); text-align: center; }
+.diff-added { background: #1a1a1a; } .diff-added .diff-sign { color: #ffffff; }
+.diff-removed { background: #141414; text-decoration: none; } .diff-removed .diff-sign { color: #8a8a8a; } .diff-removed strong { color: #9a9a9a; text-decoration: line-through; }
+.diff-changed .diff-sign, .diff-note .diff-sign { color: #c8c8c8; }
+.diff-states { display: inline-flex; align-items: center; gap: 6px; font-size: 9px; color: #9a9a9a; }
+
+/* Sub-agent team. */
+.agent-team-panel { margin-bottom: 22px; }
+.agent-team-list { display: flex; flex-direction: column; gap: 10px; padding: 0 22px 20px; }
+.agent-card { display: flex; gap: 12px; border: 1px solid #333333; border-radius: 6px; padding: 12px; background: #161616; }
+.agent-card-icon { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #262626; color: #d6d6d6; flex-shrink: 0; }
+.agent-running .agent-card-icon { background: #ffffff; color: #000000; }
+.agent-card > div { flex: 1; min-width: 0; }
+.agent-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.agent-card-head strong { font-size: 11px; font-weight: 600; color: #e6e6e6; }
+.agent-card-head small { color: #8f8f8f; font-size: 9px; }
+.agent-card-objective { margin-top: 5px; font-size: 10px; color: #b0b0b0; line-height: 1.5; }
+.agent-card > div > small { display: block; margin-top: 4px; color: #8f8f8f; font-size: 9px; }
+.agent-card-summary { margin-top: 7px; font-size: 10px; }
+.agent-card-summary summary { cursor: pointer; color: #cfcfcf; }
+.agent-card-summary p { margin-top: 6px; color: #a5a5a5; white-space: pre-wrap; line-height: 1.55; max-height: 220px; overflow: auto; }
+.spin { animation: as-spin 1.5s linear infinite; }

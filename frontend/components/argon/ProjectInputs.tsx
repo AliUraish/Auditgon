@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { ArrowRight, ArrowUpRight, Box, ChevronDown, CloudUpload, FileText, Layers2, Link2, MapPin, Play, Plus, ScanLine, ShieldCheck, X } from "lucide-react";
 import type { BlueprintModel, InspectionSnapshot, UploadRecord } from "@/lib/contracts";
 import { RESOURCE_LIMITS } from "@/lib/contracts";
-import { request, runAction } from "@/lib/client";
+import { request, RequestError, runAction } from "@/lib/client";
 import { prepareEvidenceImage } from "@/lib/evidence-image";
 import { BusyIcon, PanelHeader, Pill } from "./UI";
 
@@ -43,7 +43,7 @@ export default function ProjectInputs({ snapshot, onSnapshot, onError, onNotice,
         const byteLimit = scanFile ? RESOURCE_LIMITS.maxUploadBytes : RESOURCE_LIMITS.maxBlueprintBytes;
         if (original.size > byteLimit) throw new Error(scanFile ? "Scan uploads must be 32 MB or smaller. Use a remote scan link for a larger scene." : `${original.name} is larger than 10 MB. Choose a smaller file or a focused drawing sheet.`);
         const file = scanFile ? new File([original], original.name, { type: "application/octet-stream" }) : /\.(txt|md|csv)$/i.test(original.name) ? new File([original], original.name, { type: "text/plain" }) : /\.json$/i.test(original.name) ? new File([original], original.name, { type: "application/json" }) : /\.pdf$/i.test(original.name) ? new File([original], original.name, { type: "application/pdf" }) : /\.(png|jpe?g|webp)$/i.test(original.name) ? await prepareEvidenceImage(original) : original;
-        let kind: Material["kind"] = scanFile ? "scan" : /\.pdf$/i.test(original.name) ? "blueprint" : "reference";
+        let kind: Material["kind"] = scanFile ? "scan" : /\.pdf$/i.test(original.name) || /sketch|plan|layout|floor|draw/i.test(original.name) ? "blueprint" : "reference";
         if (/\.json$/i.test(original.name) && file.size <= 1024 * 1024) {
           try { const parsed = JSON.parse(await file.text()); const model = parsed?.blueprint || parsed; if (Array.isArray(model?.rooms) && Array.isArray(model?.features)) kind = "blueprint"; }
           catch { /* A note attachment stays available as a reference even when it is not a drawing model. */ }
@@ -69,8 +69,12 @@ export default function ProjectInputs({ snapshot, onSnapshot, onError, onNotice,
         const savedSource = snapshot.scan.sourceUrl || snapshot.scan.assetUrl || "";
         const normalizedSavedSource = /^https?:\/\//i.test(savedSource) ? new URL(savedSource).href : savedSource;
         const sourceChanged = source && source.href !== normalizedSavedSource;
-        next = await request<InspectionSnapshot>("/api/scene", { method: "PATCH", body: JSON.stringify({ ...(source && sourceChanged ? { sourceUrl: source.href } : {}), ...(projectName.trim() ? { name: projectName.trim() } : {}), scale: numericScale, calibrated }) });
-        onSnapshot(next);
+        const settingsChanged = sourceChanged || (projectName.trim() && projectName.trim() !== snapshot.name) || numericScale !== snapshot.scan.scale || calibrated !== snapshot.scan.calibrated;
+        // Materials can be added to a running audit; only touch the scene when something about it changed.
+        if (settingsChanged) {
+          next = await request<InspectionSnapshot>("/api/scene", { method: "PATCH", body: JSON.stringify({ ...(source && sourceChanged ? { sourceUrl: source.href } : {}), ...(projectName.trim() ? { name: projectName.trim() } : {}), scale: numericScale, calibrated }) });
+          onSnapshot(next);
+        }
       }
       const orderedMaterials = [...materials.filter(item => item.kind === "scan"), ...materials.filter(item => item.kind !== "scan")];
       for (const material of orderedMaterials) {
@@ -82,6 +86,16 @@ export default function ProjectInputs({ snapshot, onSnapshot, onError, onNotice,
           const parsed = JSON.parse(await material.file.text());
           const blueprint = { ...(parsed.blueprint || parsed), sourceUploadId: uploaded.id } as BlueprintModel;
           next = await request<InspectionSnapshot>("/api/blueprint", { method: "POST", body: JSON.stringify({ blueprint }) });
+        } else if (material.kind === "blueprint") {
+          setBusy(`Reading ${material.file.name}`);
+          try {
+            next = await request<InspectionSnapshot>("/api/blueprint", { method: "POST", body: JSON.stringify({ uploadId: uploaded.id }) });
+            onSnapshot(next);
+            onNotice(`Sketch read: ${next.blueprint.rooms.length} rooms and ${next.blueprint.features.length} features to verify.`);
+          } catch (cause) {
+            if (cause instanceof RequestError && cause.code === "GEMINI_NOT_CONFIGURED") onNotice("Sketch saved. Add GEMINI_API_KEY on the server to read it now; Argon can still read it during the audit.");
+            else throw cause;
+          }
         }
         setMaterials(previous => previous.filter(item => item.id !== material.id));
       }
@@ -100,7 +114,7 @@ export default function ProjectInputs({ snapshot, onSnapshot, onError, onNotice,
   return <div className="inputs-layout audit-inputs-layout">
     <div className="input-main">
       <section className="panel input-section scan-input-section">
-        <div className="input-intro"><span className="input-hero-icon"><ScanLine size={27} strokeWidth={1.3} /></span><span className="eyebrow">YOUR SPACE, UNDERSTOOD</span><h2>Drop in a scan.<br />We’ll look closer.</h2><p>A 3D scan link is all you need to begin. Add plans, photos, documents, or a compact scan file for a more informed audit.</p></div>
+        <div className="input-intro"><span className="input-hero-icon"><ScanLine size={27} strokeWidth={1.3} /></span><span className="eyebrow">YOUR SPACE, UNDERSTOOD</span><h2>Drop in a scan and a sketch.<br />Argon checks one against the other.</h2><p>A 3D scan link is all you need to begin. Add a rough sketch of the intended layout and Argon verifies it room by room, drawing what it finds in the scan.</p></div>
         <form onSubmit={event => { event.preventDefault(); void prepareProject(false); }} className="audit-source-form">
           <label htmlFor="project-name">Project name <span>Optional</span></label><input id="project-name" value={projectName} onChange={event => setProjectName(event.target.value)} maxLength={160} placeholder="Give this space a name" />
           <label htmlFor="scene-url">3D scan link</label><div className="scan-url-field"><Link2 size={17} /><input id="scene-url" value={sceneUrl} type="url" onChange={event => setSceneUrl(event.target.value)} placeholder="https://superspl.at/scene/…" required={!hasQueuedScan && !hasSource} /></div><p className="field-hint">The scan opens here in Auditgon. Its source stays remote.</p>
@@ -108,16 +122,16 @@ export default function ProjectInputs({ snapshot, onSnapshot, onError, onNotice,
           <div className="audit-input-actions"><button className="button button-outline" type="submit" disabled={!!busy || (!sceneUrl.trim() && !hasQueuedScan && !hasSource)}><BusyIcon busy={busy === "open"}><Box size={15} /></BusyIcon>Open scan here</button><button className="button button-dark" type="button" disabled={!!busy || (!sceneUrl.trim() && !hasQueuedScan && !hasSource)} onClick={() => void prepareProject(true)}><BusyIcon busy={busy === "audit" || (busy !== null && busy !== "open" && busy !== "preparing")}><Play size={14} fill="currentColor" /></BusyIcon>{busy && busy !== "preparing" ? busy.startsWith("Uploading") ? "Saving materials…" : "Preparing audit…" : "Start audit"}<ArrowRight size={14} /></button></div>
         </form>
       </section>
-      <section className="panel input-section"><PanelHeader eyebrow="OPTIONAL CONTEXT" title="Add your materials" action={<Pill>{materials.length + snapshot.uploads.length} files</Pill>} /><p className="section-description">Blueprints describe the intended design. Photos and documents add the detail a scan may not capture. You can also audit with the scan alone.</p>
+      <section className="panel input-section"><PanelHeader eyebrow="OPTIONAL CONTEXT" title="Add your materials" action={<Pill>{materials.length + snapshot.uploads.length} files</Pill>} /><p className="section-description">A rough sketch of the intended layout is the claim Argon verifies. Photos and documents add the detail a scan may not capture. You can also audit with the scan alone.</p>
         <input ref={input} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.json,.txt,.md,.csv,.sog,.ply" multiple className="visually-hidden" aria-label="Add plans photos or documents" onChange={event => { void selectFiles(Array.from(event.target.files || [])); event.target.value = ""; }} />
-        <button className={`upload-zone ${dragging ? "is-dragging" : ""}`} type="button" disabled={!!busy} onClick={() => input.current?.click()} onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); if (!busy) void selectFiles(Array.from(event.dataTransfer.files)); }}><span className="upload-icon"><BusyIcon busy={busy === "preparing"}><CloudUpload size={23} strokeWidth={1.4} /></BusyIcon></span><strong>{busy === "preparing" ? "Preparing your materials…" : "Drop plans, photos, or documents"}</strong><span>or click to choose files</span><small>PLANS, IMAGES & DOCS UP TO 10 MB · SOG / PLY SCANS UP TO 32 MB</small></button>
-        {materials.length ? <div className="queued-materials">{materials.map(material => <div key={material.id}><FileText size={16} /><div><strong>{material.file.name}</strong><span>{(material.file.size / 1024 / 1024).toFixed(2)} MB · Ready to upload</span></div><select aria-label={`Material type for ${material.file.name}`} value={material.kind} onChange={event => setMaterials(previous => previous.map(item => item.id === material.id ? { ...item, kind: event.target.value as Material['kind'] } : item))} disabled={!!busy || material.kind === "scan"}><option value="blueprint">Blueprint</option><option value="reference">Reference</option>{material.kind === "scan" ? <option value="scan">3D scan</option> : null}</select><button className="icon-button" type="button" aria-label={`Remove ${material.file.name}`} onClick={() => setMaterials(previous => previous.filter(item => item.id !== material.id))} disabled={!!busy}><X size={14} /></button></div>)}</div> : null}
+        <button className={`upload-zone ${dragging ? "is-dragging" : ""}`} type="button" disabled={!!busy} onClick={() => input.current?.click()} onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={event => { event.preventDefault(); setDragging(false); if (!busy) void selectFiles(Array.from(event.dataTransfer.files)); }}><span className="upload-icon"><BusyIcon busy={busy === "preparing"}><CloudUpload size={23} strokeWidth={1.4} /></BusyIcon></span><strong>{busy === "preparing" ? "Preparing your materials…" : "Drop plans, photos, or documents"}</strong><span>or click to choose files</span><small>SKETCHES, PLANS, PHOTOS & DOCS UP TO 10 MB · SOG / PLY SCANS UP TO 32 MB</small></button>
+        {materials.length ? <div className="queued-materials">{materials.map(material => <div key={material.id}><FileText size={16} /><div><strong>{material.file.name}</strong><span>{(material.file.size / 1024 / 1024).toFixed(2)} MB · Ready to upload</span></div><select aria-label={`Material type for ${material.file.name}`} value={material.kind} onChange={event => setMaterials(previous => previous.map(item => item.id === material.id ? { ...item, kind: event.target.value as Material['kind'] } : item))} disabled={!!busy || material.kind === "scan"}><option value="blueprint">Sketch / plan</option><option value="reference">Reference</option>{material.kind === "scan" ? <option value="scan">3D scan</option> : null}</select><button className="icon-button" type="button" aria-label={`Remove ${material.file.name}`} onClick={() => setMaterials(previous => previous.filter(item => item.id !== material.id))} disabled={!!busy}><X size={14} /></button></div>)}</div> : null}
         {snapshot.uploads.length ? <div className="uploaded-files"><h3>Project materials</h3>{snapshot.uploads.slice(-20).reverse().map(upload => <a href={upload.url} target="_blank" rel="noreferrer" key={upload.id}><FileText size={14} /><span>{upload.filename}</span><Pill>{upload.kind}</Pill><small>{(upload.size / 1024).toFixed(0)} KB</small><ArrowUpRight size={13} /></a>)}</div> : null}
         {materials.length ? <p className="field-hint">Your queued files are saved when you open the scan or start the audit.</p> : null}
       </section>
     </div>
     <aside className="input-side">
-      <section className="audit-deliverables"><span className="eyebrow">WHAT YOU GET</span><h3>From scan to<br />clear next steps.</h3><div><MapPin size={18} /><span><strong>Room by room understanding</strong><small>A spatial model built from the available evidence.</small></span></div><div><Layers2 size={18} /><span><strong>3D blueprint</strong><small>See the space and the areas needing attention.</small></span></div><div><ScanLine size={18} /><span><strong>Findings in the scan</strong><small>Marked locations with the reason, evidence, and next action.</small></span></div><div><FileText size={18} /><span><strong>A useful audit report</strong><small>Your findings, organized and ready to share.</small></span></div></section>
+      <section className="audit-deliverables"><span className="eyebrow">WHAT YOU GET</span><h3>From scan to<br />clear next steps.</h3><div><MapPin size={18} /><span><strong>Sketch verified room by room</strong><small>Each drawn room, connection, and feature checked against the scan.</small></span></div><div><Layers2 size={18} /><span><strong>3D blueprint</strong><small>See the space and the areas needing attention.</small></span></div><div><ScanLine size={18} /><span><strong>Findings drawn in the scan</strong><small>Lines and outlines on the live scan and the blueprint, with the reason, evidence, and next action.</small></span></div><div><FileText size={18} /><span><strong>A useful audit report</strong><small>Your findings, organized and ready to share.</small></span></div></section>
       {hasSource ? <section className="panel input-section"><PanelHeader title="Current project" /><div className="current-project-source"><Link2 size={16} /><a href={snapshot.scan.sourceUrl || snapshot.scan.assetUrl || "#"} target="_blank" rel="noreferrer">{snapshot.scan.name || snapshot.name}<ArrowUpRight size={12} /></a></div><p className="field-hint">{hasRooms ? `${snapshot.blueprint.rooms.length} rooms · ${snapshot.blueprint.features.length} features` : "Rooms and geometry will be generated during the audit."}</p><button type="button" className="button button-outline full-width" onClick={onOpenWorkspace}><Box size={14} />Open workspace<ArrowUpRight size={13} /></button></section> : null}
       <section className="memory-card"><div><ShieldCheck size={18} /><h3>Light on your device</h3></div><p>The scan streams from its source. Materials upload one at a time, and images are resized before they are stored.</p><ul><li>One live 3D viewer at a time</li><li>No scene binary added to your project</li><li>Saved findings and evidence stay linked</li></ul></section>
       {hasSource ? <section className="reset-section"><h3>Another space to audit?</h3><p>Create an empty project for a new scan and its materials. Export this report first if you need a copy.</p><button type="button" className="text-button" onClick={onReset}><Plus size={12} />New audit project<ArrowUpRight size={12} /></button></section> : null}
