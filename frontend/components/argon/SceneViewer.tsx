@@ -47,7 +47,7 @@ function settingsFor(_annotations: Finding[], position?: Vec3, target?: Vec3) {
   };
 }
 
-export default function SceneViewer({ snapshot, selectedFindingId, onSelectFinding, selectedRoomId, viewMode = "perspective", showMarkers = true, showPath = true, onAddMarker, className = "", referenceOnly = false, viewOwner = "human", onViewOwnerChange, live, servesAgent = true, splatBudget = RESOURCE_LIMITS.maxSplats, title, followSelection = true }: SceneViewerProps) {
+export default function SceneViewer({ snapshot, selectedFindingId, onSelectFinding, selectedRoomId, viewMode = "perspective", showMarkers = true, showPath = true, onAddMarker, className = "", referenceOnly = false, viewOwner = "human", onViewOwnerChange, live, servesAgent = true, splatBudget = RESOURCE_LIMITS.maxSplats, title, followSelection = true, flyRequest = 0 }: SceneViewerProps) {
   const configured = snapshot.scan.configured ?? Boolean(snapshot.scan.assetUrl);
   const [mode, setMode] = useState<Mode>(referenceOnly ? "reference" : "source");
   const [loadRequested, setLoadRequested] = useState(Boolean(configured && snapshot.scan.assetUrl && !referenceOnly));
@@ -98,25 +98,28 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
   }, [snapshot.scan.version, snapshot.scan.assetUrl, snapshot.scan.initialCameraPosition, snapshot.scan.initialCameraTarget, configured, referenceOnly, unload]);
   useEffect(() => { if (viewMode === "top") { unload(); setMode("reference"); } }, [viewMode, unload]);
 
+  // Fly the camera to the selected finding: when it is tapped, and again as soon as a (re)loaded viewer is ready.
+  const flyTo = useCallback((finding: Finding) => {
+    const viewer = viewerRef.current;
+    if (!viewer?.state.loaded) return false;
+    const pose = { position: finding.cameraTarget, title: "Argon camera", text: "", camera: { initial: { position: finding.cameraPosition, target: finding.cameraTarget, fov: 65 } } };
+    const list = viewer.annotations as unknown as (typeof pose)[];
+    if (list.length) list[list.length - 1] = pose; else list.push(pose);
+    try { viewer.selectAnnotation(list.length - 1); return true; } catch { return false; }
+  }, []);
+  const flownTo = useRef<string | null>(null);
   useEffect(() => {
-    if (!followSelection) { userSelected.current = null; return; }
-    if (selectedFindingId && userSelected.current !== selectedFindingId) {
-      userSelected.current = selectedFindingId;
-      if (selected?.isSample || (!snapshot.scan.calibrated && selected?.annotationSource !== "scan" && !scanFrameFindings)) { unload(); setMode("reference"); }
-      else if (!referenceOnly) {
-        setMode("source");
-        if (configured && snapshot.scan.assetUrl) setLoadRequested(true);
-        const target = realAnnotations.find(f => f.id === selectedFindingId);
-        if (viewerRef.current?.state.loaded && target) {
-          const viewer = viewerRef.current;
-          const pose = { position: target.cameraTarget, title: "Argon camera", text: "", camera: { initial: { position: target.cameraPosition, target: target.cameraTarget, fov: 65 } } };
-          const list = viewer.annotations as unknown as (typeof pose)[];
-          if (list.length) list[list.length - 1] = pose; else list.push(pose);
-          try { viewer.selectAnnotation(list.length - 1); } catch { /* the viewer may still be loading */ }
-        }
-      }
-    }
-  }, [selectedFindingId, selected?.isSample, selected?.annotationSource, snapshot.scan.calibrated, realAnnotations, unload, configured, snapshot.scan.assetUrl, referenceOnly, followSelection, scanFrameFindings]);
+    if (!followSelection) { flownTo.current = null; return; }
+    if (!selectedFindingId) { flownTo.current = null; return; }
+    if (selected?.isSample || (!snapshot.scan.calibrated && selected?.annotationSource !== "scan" && !scanFrameFindings)) { unload(); setMode("reference"); return; }
+    if (referenceOnly) return;
+    setMode("source");
+    if (configured && snapshot.scan.assetUrl && !loadRequested) setLoadRequested(true);
+    const target = realAnnotations.find(f => f.id === selectedFindingId);
+    if (target && loaded && flownTo.current !== selectedFindingId && flyTo(target)) flownTo.current = selectedFindingId;
+  }, [selectedFindingId, selected?.isSample, selected?.annotationSource, snapshot.scan.calibrated, realAnnotations, unload, configured, snapshot.scan.assetUrl, referenceOnly, followSelection, scanFrameFindings, loaded, loadRequested, flyTo]);
+  useEffect(() => { if (!loaded) flownTo.current = null; }, [loaded]);
+  useEffect(() => { flownTo.current = null; const target = realAnnotations.find(f => f.id === selectedFindingId); if (flyRequest && target && loaded && followSelection && flyTo(target)) flownTo.current = selectedFindingId; /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [flyRequest]);
 
   useEffect(() => {
     const contentUrl = snapshot.scan.assetUrl;

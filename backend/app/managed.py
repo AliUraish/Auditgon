@@ -717,8 +717,10 @@ class ManagedRunner:
             samples = provider_state(state).get("geometrySamples", [])
             sampled = lambda point: point is not None and any(sum((float(a) - float(b)) ** 2 for a, b in zip(point, sample)) < 0.0004 for sample in samples)
             sampled_anchor = sampled(details.anchor)
-            source = "scan" if sampled_anchor else "reference"
-            anchor = list(details.anchor) if sampled_anchor else fallback_anchor
+            poses = provider_state(state).get("capturePoses", {})
+            cited_pose = next((poses[upload_id] for upload_id in data.evidenceIds if upload_id in poses), None)
+            source = "scan" if (sampled_anchor or cited_pose) else "reference"
+            anchor = list(details.anchor) if sampled_anchor else list(cited_pose["target"]) if cited_pose else fallback_anchor
             drawing = {}
             dropped = []
             if details.endAnchor is not None:
@@ -746,8 +748,8 @@ class ManagedRunner:
                 drawing["measurement"] = {"value": round(span * (float(snapshot["scan"].get("scale", 1)) if calibrated else 1), 3), "units": "m" if calibrated else "scene",
                                           "method": "Straight-line distance between two returned rendered-depth samples", "uncertainty": "Approximate reconstruction geometry; not a survey measurement." + ("" if calibrated else " Scene units; no validated metric scale.")}
             finding = {"id": finding_id, "itemId": item["id"], "roomId": item["roomId"], "title": details.title, "category": "Visual workmanship" if visual else item["category"], "severity": details.severity, "status": "review", "reason": reason,
-                       "expected": details.expected, "observed": data.observed, "nextAction": details.nextAction, "uncertainty": "Visual candidate pending physical/photo confirmation. " + ("Marker uses an approximate rendered-depth scan point." if sampled_anchor else "Marker is approximately room-level; reference-to-scan registration is unverified."),
-                       "anchor": anchor, "annotationSource": source, "cameraPosition": list(details.cameraPosition) if details.cameraPosition else [anchor[0] + 2, anchor[1] + 1.7, anchor[2] + 2], "cameraTarget": list(details.cameraTarget) if details.cameraTarget else anchor,
+                       "expected": details.expected, "observed": data.observed, "nextAction": details.nextAction, "uncertainty": "Visual candidate pending physical/photo confirmation. " + ("Marker uses an approximate rendered-depth scan point." if sampled_anchor else "Marker sits at the camera target of the cited capture; approximate." if cited_pose else "Marker is approximately room-level; reference-to-scan registration is unverified."),
+                       "anchor": anchor, "annotationSource": source, "cameraPosition": list(details.cameraPosition) if details.cameraPosition else list(cited_pose["position"]) if cited_pose else [anchor[0] + 2, anchor[1] + 1.7, anchor[2] + 2], "cameraTarget": list(details.cameraTarget) if details.cameraTarget else anchor,
                        "evidence": evidence, "isSample": False, "createdAt": existing["createdAt"] if existing else iso(), "updatedAt": iso(), "history": ((existing["history"] if existing else []) + [{"at": iso(), "status": "review", "note": reason}])[-40:], **drawing}
             if "sketch-" in item["id"]:
                 finding["category"] = "Sketch deviation" if item["category"] == "Layout" else "Sketch feature"
@@ -877,6 +879,12 @@ class ManagedRunner:
             if provider.get("notice") and not data.error:
                 result["notice"] = provider.pop("notice")
             if evidence_id:
+                poses = provider.setdefault("capturePoses", {})
+                if data.cameraPosition and data.cameraTarget:
+                    poses[evidence_id] = {"position": [float(v) for v in data.cameraPosition], "target": [float(v) for v in data.cameraTarget]}
+                    if len(poses) > 160:
+                        for key in list(poses)[:-160]:
+                            poses.pop(key, None)
                 provider["capturesSinceRecord"] = provider.get("capturesSinceRecord", 0) + 1
                 provider["capturesThisRun"] = provider.get("capturesThisRun", 0) + 1
                 if provider["capturesThisRun"] == 3 and not snapshot.get("agents"):
