@@ -878,3 +878,6 @@ h1 { color:#efefef; }.page-heading p { color:#a3a3a3; }
 
 .blueprint-3d-stage { min-height: 600px; }
 .blueprint-3d-stage .argon-scene { min-height: 600px; }
+
+.inspection-table tr.is-tappable { cursor: pointer; }
+.inspection-table tr.is-tappable:hover td { background: #222222; }

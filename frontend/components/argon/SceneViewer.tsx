@@ -47,7 +47,7 @@ function settingsFor(_annotations: Finding[], position?: Vec3, target?: Vec3) {
   };
 }
 
-export default function SceneViewer({ snapshot, selectedFindingId, onSelectFinding, selectedRoomId, viewMode = "perspective", showMarkers = true, showPath = true, onAddMarker, className = "", referenceOnly = false, viewOwner = "human", onViewOwnerChange, live, servesAgent = true, splatBudget = RESOURCE_LIMITS.maxSplats, title }: SceneViewerProps) {
+export default function SceneViewer({ snapshot, selectedFindingId, onSelectFinding, selectedRoomId, viewMode = "perspective", showMarkers = true, showPath = true, onAddMarker, className = "", referenceOnly = false, viewOwner = "human", onViewOwnerChange, live, servesAgent = true, splatBudget = RESOURCE_LIMITS.maxSplats, title, followSelection = true }: SceneViewerProps) {
   const configured = snapshot.scan.configured ?? Boolean(snapshot.scan.assetUrl);
   const [mode, setMode] = useState<Mode>(referenceOnly ? "reference" : "source");
   const [loadRequested, setLoadRequested] = useState(Boolean(configured && snapshot.scan.assetUrl && !referenceOnly));
@@ -67,7 +67,8 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
   const generation = useRef(0);
   const userSelected = useRef<string | null>(null);
   const selected = snapshot.findings.find(f => f.id === selectedFindingId);
-  const realAnnotations = useMemo(() => snapshot.findings.filter(f => !f.isSample && f.status !== "dismissed" && (f.annotationSource === "scan" || snapshot.scan.calibrated)), [snapshot.findings, snapshot.scan.calibrated]);
+  const scanFrameFindings = snapshot.blueprint.coordinateFrame === "scan";
+  const realAnnotations = useMemo(() => snapshot.findings.filter(f => !f.isSample && f.status !== "dismissed" && (f.annotationSource === "scan" || snapshot.scan.calibrated || scanFrameFindings)), [snapshot.findings, snapshot.scan.calibrated, scanFrameFindings]);
   const initialCamera = useRef<{ position: Vec3; target: Vec3 } | null>(snapshot.scan.initialCameraPosition && snapshot.scan.initialCameraTarget ? { position: snapshot.scan.initialCameraPosition, target: snapshot.scan.initialCameraTarget } : null);
   const focusWaiter = useRef<{ resolve: () => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> } | null>(null);
   const [cameraRevision, setCameraRevision] = useState(0);
@@ -98,9 +99,10 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
   useEffect(() => { if (viewMode === "top") { unload(); setMode("reference"); } }, [viewMode, unload]);
 
   useEffect(() => {
+    if (!followSelection) { userSelected.current = null; return; }
     if (selectedFindingId && userSelected.current !== selectedFindingId) {
       userSelected.current = selectedFindingId;
-      if (selected?.isSample || (!snapshot.scan.calibrated && selected?.annotationSource !== "scan")) { unload(); setMode("reference"); }
+      if (selected?.isSample || (!snapshot.scan.calibrated && selected?.annotationSource !== "scan" && !scanFrameFindings)) { unload(); setMode("reference"); }
       else if (!referenceOnly) {
         setMode("source");
         if (configured && snapshot.scan.assetUrl) setLoadRequested(true);
@@ -114,7 +116,7 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
         }
       }
     }
-  }, [selectedFindingId, selected?.isSample, selected?.annotationSource, snapshot.scan.calibrated, realAnnotations, unload, configured, snapshot.scan.assetUrl, referenceOnly]);
+  }, [selectedFindingId, selected?.isSample, selected?.annotationSource, snapshot.scan.calibrated, realAnnotations, unload, configured, snapshot.scan.assetUrl, referenceOnly, followSelection, scanFrameFindings]);
 
   useEffect(() => {
     const contentUrl = snapshot.scan.assetUrl;
@@ -263,9 +265,9 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
   // AI view hands the camera to Argon: pointer and keyboard input is gated while it works.
   useEffect(() => { if (viewerRef.current?.state.loaded) viewerRef.current.state.inputEnabled = !(viewOwner === "ai" && live?.running); }, [viewOwner, loaded, live?.running]);
   // Draw Argon's lines, outlines, and walking trail over the live scan by projecting saved scene points each frame.
-  const drawnFindings = snapshot.findings.filter(f => !f.isSample && f.status !== "dismissed" && f.annotationSource === "scan" && (f.endAnchor || f.region));
+  const drawnFindings = snapshot.findings.filter(f => !f.isSample && f.status !== "dismissed" && (f.annotationSource === "scan" || scanFrameFindings) && (f.endAnchor || f.region));
   const scanFrameModel = snapshot.blueprint.coordinateFrame === "scan";
-  const pinFindings = snapshot.findings.filter(f => !f.isSample && f.status !== "dismissed" && (f.annotationSource === "scan" || snapshot.scan.calibrated));
+  const pinFindings = snapshot.findings.filter(f => !f.isSample && f.status !== "dismissed" && (f.annotationSource === "scan" || snapshot.scan.calibrated || scanFrameFindings));
   const drawKey = pinFindings.map(f => f.id + f.anchor.join(",")).join("|") + "#" + drawnFindings.map(f => `${f.id}:${f.endAnchor?.join(",")}:${f.region?.length}`).join("|") + "#" + (snapshot.trail?.length || 0) + "#" + (scanFrameModel ? snapshot.blueprint.features.map(f => f.id + f.position.join(",") + (f.dimensions || []).join(",")).join("|") + snapshot.blueprint.rooms.map(r => r.id + r.center.join(",")).join("|") : "");
   useEffect(() => {
     const viewer = viewerRef.current, canvas = overlayRef.current;
@@ -358,6 +360,20 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
           context.fillStyle = "#fff"; context.textAlign = "left"; context.fillText(tag.text, lx + 5, ly + h - 5);
           context.globalAlpha = 1;
         }
+        const focus = pinFindings.find(f => f.id === selectedFindingId);
+        if (focus) {
+          const s = project(focus.anchor);
+          if (s) {
+            const pulse = (Math.sin(Date.now() / 260) + 1) / 2;
+            context.strokeStyle = "rgba(0,0,0,0.75)"; context.lineWidth = 6; context.beginPath(); context.arc(s[0], s[1], 16 + pulse * 10, 0, Math.PI * 2); context.stroke();
+            context.strokeStyle = "#ffffff"; context.lineWidth = 2.5; context.beginPath(); context.arc(s[0], s[1], 16 + pulse * 10, 0, Math.PI * 2); context.stroke();
+            context.strokeStyle = "rgba(255,255,255,0.85)"; context.lineWidth = 1.5; context.beginPath();
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { context.moveTo(s[0] + dx * 22, s[1] + dy * 22); context.lineTo(s[0] + dx * 40, s[1] + dy * 40); }
+            context.stroke();
+            if (focus.region) { const pts = focus.region.map(project); if (pts.every(Boolean)) { context.fillStyle = "rgba(255,255,255,0.22)"; context.beginPath(); pts.forEach((q, i) => i ? context.lineTo(q![0], q![1]) : context.moveTo(q![0], q![1])); context.closePath(); context.fill(); } }
+            viewer.app.renderNextFrame = true; // keep the pulse animating while a finding is selected
+          }
+        }
         for (const f of shapes) {
           const halo = (fn: () => void) => { context.strokeStyle = "rgba(0,0,0,0.7)"; context.lineWidth = 5; fn(); context.strokeStyle = "#fff"; context.lineWidth = 2; fn(); };
           if (f.region) {
@@ -386,7 +402,7 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
     });
     return () => { disposed = true; if (handler) viewer.app.off("frameend", handler); context.clearRect(0, 0, canvas.width, canvas.height); if (originalParent && canvas.parentElement !== originalParent && originalParent.isConnected) originalParent.appendChild(canvas); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, isReference, drawKey, showMarkers, showPath, pinFindings.length]);
+  }, [loaded, isReference, drawKey, showMarkers, showPath, pinFindings.length, selectedFindingId]);
   useEffect(() => () => { if (focusWaiter.current) { clearTimeout(focusWaiter.current.timer); focusWaiter.current.reject(new Error("The viewer was closed during navigation.")); focusWaiter.current = null; } }, []);
   useEffect(() => {
     if (viewerRef.current?.state.loaded && viewMode === "walk") {
@@ -439,7 +455,7 @@ export default function SceneViewer({ snapshot, selectedFindingId, onSelectFindi
         </div>}
         <div className="as-canvas" ref={canvasHost} style={{display:loadRequested?"block":"none"}} />
         <canvas ref={overlayRef} className="as-draw-overlay" aria-hidden="true" style={{display:loadRequested && loaded ? "block" : "none"}} />
-        {loadRequested && loaded && <div className="as-pin-layer">{pinFindings.map((finding, index) => <button type="button" key={finding.id} className={`as-pin severity-${finding.severity} ${selectedFindingId === finding.id ? "selected" : ""}`} title={finding.title} aria-label={finding.title} ref={node => { if (node) pinRefs.current.set(finding.id, node); else pinRefs.current.delete(finding.id); }} onClick={() => onSelectFinding(finding.id)}>{index + 1}</button>)}</div>}
+        {loadRequested && loaded && <div className={`as-pin-layer ${selectedFindingId ? "has-selection" : ""}`}>{pinFindings.map((finding, index) => <button type="button" key={finding.id} className={`as-pin severity-${finding.severity} ${selectedFindingId === finding.id ? "selected" : ""}`} title={finding.title} aria-label={finding.title} ref={node => { if (node) pinRefs.current.set(finding.id, node); else pinRefs.current.delete(finding.id); }} onClick={() => onSelectFinding(finding.id)}>{index + 1}</button>)}</div>}
         {loadRequested && !loaded && <div className="as-loading"><LoaderCircle size={17} className="as-spin"/><span>Streaming the scan{progress>0?` · ${progress}%`:"…"}</span><button type="button" onClick={unload}>Cancel</button></div>}
         {loadRequested && <button type="button" className="as-unload" onClick={unload}><Power size={12}/> Unload scan</button>}
         {loaded && onAddMarker && <button type="button" className="as-add-marker" onClick={()=>setMarkingPoint(v=>!v)}><MousePointer2 size={12}/>{markingPoint?"Cancel placement":"Mark a point"}</button>}

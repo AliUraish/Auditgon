@@ -160,6 +160,19 @@ class ManagedRunner:
         return True
 
     async def fail(self, state: State, error: Exception):
+        transient = isinstance(error, ApiFailure) and error.code in ("PROVIDER_UNREACHABLE", "PROVIDER_429", "PROVIDER_500", "PROVIDER_502", "PROVIDER_503", "PROVIDER_504", "PROVIDER_RESPONSE_LIMIT")
+        provider = provider_state(state)
+        if transient and provider.get("transientFailures", 0) < 8:
+            # Keep the audit running: the unsent batch or saved turn is retried by the next poll.
+            provider["transientFailures"] = provider.get("transientFailures", 0) + 1
+            provider.update(operationUntil=0, pollAfter=now_ms() + min(30_000, 4_000 * provider["transientFailures"]))
+            state["snapshot"].setdefault("agent", {}).pop("error", None)
+            event(state, "system", "Provider slow; retrying", "{} Retry {} of 8; the audit stays running.".format(error.message, provider["transientFailures"]))
+            try:
+                self.save(state)
+            except ApiFailure:
+                pass
+            return
         stop_clock(state)
         exhausted = isinstance(error, ApiFailure) and error.code == "AGENT_BUDGET"
         state["snapshot"]["status"] = "incomplete" if exhausted else "error"

@@ -21,7 +21,7 @@ class GeminiClient:
         try:
             async with self.client.stream(method or ("GET" if body is None else "POST"), url,
                                           headers={"x-goog-api-key": self.api_key, "Content-Type": "application/json", "Api-Revision": "2026-05-20"},
-                                          json=body, timeout=httpx.Timeout(150 if body is not None else 45, connect=10)) as response:
+                                          json=body, timeout=httpx.Timeout(300 if body is not None else 60, connect=10)) as response:
                 if response.status_code >= 400:
                     # Server-side diagnostics only: status and a short body excerpt, never the key or the request.
                     try:

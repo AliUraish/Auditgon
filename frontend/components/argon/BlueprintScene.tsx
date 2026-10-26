@@ -116,7 +116,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
           if (batch.finish) {
             const mat = material('#d8dde3'); mat.diffuseMap = finishTexture(batch.finish, batch.tint); mat.update();
             addMesh(batch.positions,batch.indices,batch.normals,mat,pc.PRIMITIVE_TRIANGLES,batch.uvs);
-          } else addMesh(batch.positions,batch.indices,batch.normals,material(key));
+          } else addMesh(batch.positions,batch.indices,batch.normals,material(key, false, key === '#284f76' ? 0.82 : 1));
         }
         addMesh(data.grid,null,null,material('#3c719f',true,0.34),pc.PRIMITIVE_LINES);
         addMesh(data.edges,null,null,material('#f0f8ff',true),pc.PRIMITIVE_LINES);
@@ -129,7 +129,11 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
         const drawn = showMarkers ? snapshot.findings.filter(f => f.status !== 'dismissed' && (f.endAnchor || f.region) && (f.annotationSource !== 'scan' || scanFrame)) : [];
         const outline:number[]=[], fillPositions:number[]=[], fillNormals:number[]=[], fillIndices:number[]=[];
         for (const f of drawn) {
-          if (f.endAnchor) outline.push(...f.anchor, ...f.endAnchor);
+          if (f.endAnchor) {
+            outline.push(...f.anchor, ...f.endAnchor);
+            const tick = data.extent * 0.012;
+            for (const end of [f.anchor, f.endAnchor]) outline.push(end[0], end[1] - tick, end[2], end[0], end[1] + tick, end[2]);
+          }
           if (f.region) {
             f.region.forEach((p,i)=>outline.push(...p, ...f.region![(i+1)%f.region!.length]));
             const base = fillPositions.length/3;
@@ -148,6 +152,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
         const markers = [
           ...snapshot.blueprint.rooms.map(room => ({ id: 'room-' + room.id, position: [room.center[0],(room.floorElevation||0)+0.025,room.center[2]] as Vec3 })),
           ...snapshot.findings.filter(f => f.status !== 'dismissed').map(f => ({ id: 'finding-' + f.id, position: f.anchor })),
+          ...snapshot.blueprint.features.filter(f => /^Sampled position/.test(f.source || '')).slice(0, 40).map(f => ({ id: 'element-' + f.id, position: f.position })),
           ...snapshot.findings.filter(f => f.status !== 'dismissed' && f.endAnchor && f.measurement && (f.annotationSource !== 'scan' || scanFrame)).map(f => ({ id: 'measure-' + f.id, position: [(f.anchor[0]+f.endAnchor![0])/2,(f.anchor[1]+f.endAnchor![1])/2,(f.anchor[2]+f.endAnchor![2])/2] as Vec3 })),
         ];
         const update = () => {
@@ -161,7 +166,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
           ownApp.renderNextFrame = true;
           const factor = ownApp.graphicsDevice.width/element.clientWidth;
           // Layout pass: project every label, then resolve overlaps (pins first, then measurements, then room names).
-          type Placed = { id: string; el: HTMLElement; x: number; y: number; w: number; h: number; kind: 'pin' | 'measure' | 'room' };
+          type Placed = { id: string; el: HTMLElement; x: number; y: number; w: number; h: number; kind: 'pin' | 'measure' | 'room' | 'element' };
           const projected: Placed[] = [];
           for (const marker of markers) {
             const label = labels.current.get(marker.id); if (!label) continue;
@@ -170,15 +175,16 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
             const visible = x>-30 && x<element.clientWidth+30 && y>-30 && y<element.clientHeight+30;
             label.style.visibility = visible ? 'visible' : 'hidden';
             if (!visible) continue;
-            projected.push({ id: marker.id, el: label, x, y, w: label.offsetWidth || 24, h: label.offsetHeight || 24, kind: marker.id.startsWith('finding-') ? 'pin' : marker.id.startsWith('measure-') ? 'measure' : 'room' });
+            projected.push({ id: marker.id, el: label, x, y, w: label.offsetWidth || 24, h: label.offsetHeight || 24, kind: marker.id.startsWith('finding-') ? 'pin' : marker.id.startsWith('measure-') ? 'measure' : marker.id.startsWith('element-') ? 'element' : 'room' });
           }
-          const order = { pin: 0, measure: 1, room: 2 } as const;
+          const order = { pin: 0, measure: 1, room: 2, element: 3 } as const;
           projected.sort((a, b) => order[a.kind] - order[b.kind] || a.y - b.y || a.x - b.x);
           const placed: Placed[] = [];
           const overlaps = (a: Placed, b: Placed) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 + 4 && Math.abs(a.y - b.y) < (a.h + b.h) / 2 + 3;
           for (const item of projected) {
             // Small nudges only, so every label stays next to what it marks.
-            const blockers = item.kind === 'room' ? placed.filter(other => other.kind === 'pin') : placed.filter(other => other.kind !== 'room');
+            const blockers = item.kind === 'room' ? placed.filter(other => other.kind === 'pin') : item.kind === 'element' ? placed : placed.filter(other => other.kind !== 'room');
+            if (item.kind === 'element') { item.el.style.visibility = blockers.some(other => overlaps(item, other)) ? 'hidden' : 'visible'; if (item.el.style.visibility === 'hidden') continue; }
             let tries = 0;
             if (item.kind === 'pin') { const ox = item.x; while (blockers.some(other => overlaps(item, other)) && tries < 4) { tries++; item.x = ox + (tries % 2 ? 1 : -1) * (item.w + 3) * Math.ceil(tries / 2); } }
             else if (item.kind === 'measure') { const oy = item.y; if (blockers.some(other => overlaps(item, other))) item.y = oy + item.h + 6; if (blockers.some(other => overlaps(item, other))) item.y = oy - item.h - 6; }
@@ -232,7 +238,7 @@ export default function BlueprintScene({ snapshot, selectedRoomId, selectedFindi
   return <div className="blueprint-renderer" ref={host} tabIndex={0} role="region" aria-label="Interactive blue and white 3D cutaway blueprint. Drag to orbit, scroll to zoom, Shift-drag to pan, or use arrow keys.">
     {!ready && !error && <div className="blueprint-renderer-status"><LoaderCircle size={17} className="as-spin"/>Building the 3D blueprint…</div>}
     {error && <div className="blueprint-renderer-status" role="alert">{error}</div>}
-    {ready && <div className="blueprint-labels">{snapshot.blueprint.rooms.map(room=><div key={room.id} className="blueprint-room-label" ref={node=>{if(node)labels.current.set('room-'+room.id,node);else labels.current.delete('room-'+room.id);}}>{room.name}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed'&&f.endAnchor&&f.measurement&&(selectedFindingId===f.id||snapshot.findings.filter(g=>g.endAnchor&&g.measurement).length<=3)).map(finding=><div key={'measure-'+finding.id} className="blueprint-measure-label" ref={node=>{if(node)labels.current.set('measure-'+finding.id,node);else labels.current.delete('measure-'+finding.id);}}>≈ {finding.measurement!.value} {finding.measurement!.units === 'm' ? 'm' : 'su'}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed').map((finding,index)=><button type="button" key={finding.id} className={'blueprint-finding-pin severity-'+finding.severity+(selectedFindingId===finding.id?' selected':'')} ref={node=>{if(node)labels.current.set('finding-'+finding.id,node);else labels.current.delete('finding-'+finding.id);}} aria-label={finding.title} title={finding.title} onClick={()=>onSelectFinding(finding.id)}>{index+1}</button>)}</div>}
+    {ready && <div className="blueprint-labels">{snapshot.blueprint.rooms.map(room=><div key={room.id} className="blueprint-room-label" ref={node=>{if(node)labels.current.set('room-'+room.id,node);else labels.current.delete('room-'+room.id);}}>{room.name}</div>)}{showMarkers&&snapshot.blueprint.features.filter(f=>/^Sampled position/.test(f.source||'')).slice(0,40).map(feature=><div key={'element-'+feature.id} className="blueprint-element-label" ref={node=>{if(node)labels.current.set('element-'+feature.id,node);else labels.current.delete('element-'+feature.id);}}>{(feature.kind==='furniture'?(feature.objectType||'item'):feature.kind)+' · '+feature.label.slice(0,26)}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed'&&f.endAnchor&&f.measurement&&(selectedFindingId===f.id||snapshot.findings.filter(g=>g.endAnchor&&g.measurement).length<=3)).map(finding=><div key={'measure-'+finding.id} className="blueprint-measure-label" ref={node=>{if(node)labels.current.set('measure-'+finding.id,node);else labels.current.delete('measure-'+finding.id);}}>≈ {finding.measurement!.value} {finding.measurement!.units === 'm' ? 'm' : 'su'}</div>)}{showMarkers&&snapshot.findings.filter(f=>f.status!=='dismissed').map((finding,index)=><button type="button" key={finding.id} className={'blueprint-finding-pin severity-'+finding.severity+(selectedFindingId===finding.id?' selected':'')} ref={node=>{if(node)labels.current.set('finding-'+finding.id,node);else labels.current.delete('finding-'+finding.id);}} aria-label={finding.title} title={finding.title} onClick={()=>onSelectFinding(finding.id)}>{index+1}</button>)}</div>}
     <button type="button" className="blueprint-reset" aria-label="Reset 3D blueprint camera" onClick={()=>runtime.current?.reset()}><RotateCcw size={13}/></button>
   </div>;
 }

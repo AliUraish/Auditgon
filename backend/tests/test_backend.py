@@ -379,8 +379,10 @@ def test_failed_provider_continuation_resumes_without_replaying_a_tool_commit(se
             with pytest.raises(ApiFailure):
                 await runner.start(state)
             saved = store.load(context.owner)
-            assert saved["snapshot"]["status"] == "error"
+            # A provider 503 is transient: the run stays alive and the unsent batch is kept for the retry.
+            assert saved["snapshot"]["status"] == "running" and "error" not in saved["snapshot"]["agent"]
             assert saved["provider"]["continuation"]["results"][0]["callId"] == "read-1"
+            saved["snapshot"]["status"] = "ready"
             await runner.start(saved)
             assert saved["provider"]["executedCalls"] == ["read-1"]
             assert "continuation" not in saved["provider"]

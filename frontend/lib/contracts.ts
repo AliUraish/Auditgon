@@ -81,7 +81,7 @@ export interface LiveStatus { running: boolean; action: string; detail: string; 
 export interface SceneViewerProps {
   snapshot: InspectionSnapshot; selectedFindingId: string | null;
   viewOwner?: ViewOwner; onViewOwnerChange?: (owner: ViewOwner) => void; live?: LiveStatus;
-  servesAgent?: boolean; splatBudget?: number; title?: string;
+  servesAgent?: boolean; splatBudget?: number; title?: string; followSelection?: boolean;
   onSelectFinding: (id: string) => void; selectedRoomId?: string | null;
   viewMode?: ViewMode; showMarkers?: boolean; showPath?: boolean;
   onAddMarker?: (anchor: Vec3, context?: MarkerContext) => void; className?: string; referenceOnly?: boolean;
