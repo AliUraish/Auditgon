@@ -76,10 +76,12 @@ def test_verdict_requires_resolved_scope_and_matches_severity():
     assert verdict(state["snapshot"]) == "Incomplete"
     for item in state["snapshot"]["checklist"]:
         item["status"] = "pass"
+    for finding in state["snapshot"]["findings"]:
+        finding["status"] = "open"
     assert verdict(state["snapshot"]) == "Fail"
     for finding in state["snapshot"]["findings"]:
         if finding["severity"] == "major":
-            finding["status"] = "resolved"
+            finding["status"] = "review"  # unconfirmed candidates never fail an audit
     assert verdict(state["snapshot"]) == "Pass with notes"
     for finding in state["snapshot"]["findings"]:
         finding["status"] = "resolved"

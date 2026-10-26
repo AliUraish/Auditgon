@@ -114,10 +114,12 @@ def verdict(snapshot: Snapshot) -> str:
         return "Incomplete"
     if any(item["status"] in ("pending", "observing", "blocked") for item in snapshot["checklist"]):
         return "Incomplete"
-    active = [finding for finding in snapshot["findings"] if finding["status"] in ("open", "review")]
-    if any(finding["severity"] in ("major", "critical") for finding in active):
+    # Only confirmed findings (status open) can fail an audit; review candidates pending on-site confirmation make it a pass with notes.
+    confirmed = [finding for finding in snapshot["findings"] if finding["status"] == "open"]
+    candidates = [finding for finding in snapshot["findings"] if finding["status"] == "review"]
+    if any(finding["severity"] in ("major", "critical") for finding in confirmed):
         return "Fail"
-    return "Pass with notes" if active else "Pass"
+    return "Pass with notes" if confirmed or candidates else "Pass"
 
 
 def finalize(state: State, now: Optional[int] = None) -> None:
